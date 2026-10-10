@@ -1,0 +1,17 @@
+run_id,location,point,dx_mm,dy_mm,dz_mm,resultant_mm
+R002,Lower_Hinge_Pillar,1,51.23,17.47,21.44,58.22
+R002,Lower_Hinge_Pillar,2,62.48,21.30,26.14,71.00
+R002,Lower_Hinge_Pillar,3,56.86,19.38,23.79,64.61
+R002,Footrest,1,88.58,28.84,43.94,103.00
+R002,Left_Toepan,1,139.32,45.36,69.11,162.00
+R002,Brake_Pedal,1,67.94,22.12,33.70,79.00
+R002,Parking_Brake_Pedal,1,49.88,16.24,24.74,58.00
+R002,Rocker_Panel,1,8.19,23.40,4.68,25.23
+R002,Rocker_Panel,2,10.46,29.90,5.98,32.24
+R002,Rocker_Panel,3,8.64,24.70,4.94,26.63
+R002,Steering_Column,1,39.00,9.75,15.60,43.12
+R002,Upper_Hinge_Pillar,1,37.52,12.79,15.70,42.64
+R002,Upper_Hinge_Pillar,2,45.76,15.60,19.15,52.00
+R002,Upper_Hinge_Pillar,3,41.64,14.20,17.43,47.32
+R002,Upper_Dash,1,37.84,12.32,18.77,44.00
+R002,Left_Instrument_Panel,1,84.28,27.44,41.81,98.00
