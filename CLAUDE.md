@@ -51,6 +51,7 @@
 
 ## 테스트
 - `rateRun`은 경계값, 동률, 최악값 제한 케이스를 확인하는 테스트를 둔다 (`tests/rating.test.html` 또는 Node로 실행 가능한 형태)
+  - 실행: `node tests/rating.test.js` (index.html 의 `@core-start` ~ `@core-end` 구간을 읽어 테스트)
 - `samples/`에 실제 CSV 샘플을 두고 파싱 결과를 확인한다
 
 ## CSV 포맷 (확정)
