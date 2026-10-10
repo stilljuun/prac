@@ -16,30 +16,32 @@
 2. run 선택 체크박스 (다중 비교)
 3. run별 판정 카드: Lower / Upper / 종합
 4. 차트: 판정구간 배경 + 측정위치별 막대 (다중 run은 그룹 막대, 색+무늬 구분, 1개 run이면 막대 위에 값 표시)
-5. 표: 행 = 측정위치, 열 = 선택한 run, 셀은 값(cm) + 판정 등급 색 표시
+5. 표: 행 = 측정위치, 열 = 선택한 run, 셀은 값(mm) + 판정 등급 색 표시
 
 ## 코드 구조
 기능별로 분리해 나중에 Apps Script로 옮기기 쉽게 한다.
 - `PROTOCOL` 설정 객체: 측정위치, 그룹, 기준값 (아래 표)
-- `parseCsv(text, fileName)` → `{ runId, name, values: { location_key: value_cm } }`
+- `parseCsv(text, fileName)` → `{ runId, name, values: { location_key: value_mm } }`
 - `rateRun(run)` → `{ lower, upper, overall }` (순수 함수, DOM 접근 금지)
 - `renderChart(runs)`, `renderTable(runs)`, `renderCards(runs)`
 - 파일 읽기(FileReader)는 데이터 로드 부분에만 둔다 → 나중에 `google.script.run`으로 교체할 자리
 
-## IIHS Small Overlap 판정 규칙 (Protocol VII, April 2024, 단위 cm)
+## IIHS Small Overlap 판정 규칙 (Protocol VII, April 2024, 단위 mm)
+
+앱 전체(입력·기준값·차트·표)는 **mm 단위**로 통일한다. 기준값은 IIHS 원문(cm)을 ×10 한 값이다.
 
 | location_key | 측정위치 | 그룹 | Good ≤ | Acceptable ≤ | Marginal ≤ |
 |---|---|---|---|---|---|
-| lower_hinge_pillar | Lower hinge pillar | lower | 15 | 22.5 | 30 |
-| footrest | Footrest | lower | 15 | 22.5 | 30 |
-| left_toepan | Left toepan | lower | 15 | 22.5 | 30 |
-| brake_pedal | Brake pedal | lower | 15 | 22.5 | 30 |
-| parking_brake | Parking brake pedal | lower | 15 | 22.5 | 30 |
-| rocker_lat | Rocker panel (lat) | lower | 5 | 10 | 15 |
-| steering_long | Steering column (long) | upper | 5 | 10 | 15 |
-| upper_hinge_pillar | Upper hinge pillar | upper | 7.5 | 12.5 | 17.5 |
-| upper_dash | Upper dash | upper | 7.5 | 12.5 | 17.5 |
-| left_ip | Left instrument panel | upper | 7.5 | 12.5 | 17.5 |
+| lower_hinge_pillar | Lower hinge pillar | lower | 150 | 225 | 300 |
+| footrest | Footrest | lower | 150 | 225 | 300 |
+| left_toepan | Left toepan | lower | 150 | 225 | 300 |
+| brake_pedal | Brake pedal | lower | 150 | 225 | 300 |
+| parking_brake | Parking brake pedal | lower | 150 | 225 | 300 |
+| rocker_lat | Rocker panel (lat) | lower | 50 | 100 | 150 |
+| steering_long | Steering column (long) | upper | 50 | 100 | 150 |
+| upper_hinge_pillar | Upper hinge pillar | upper | 75 | 125 | 175 |
+| upper_dash | Upper dash | upper | 75 | 125 | 175 |
+| left_ip | Left instrument panel | upper | 75 | 125 | 175 |
 
 - Marginal 상한 초과 → Poor. 경계값은 더 좋은 등급 (`value <= 상한`)
 - 서브레이팅(lower, upper 각각): 가장 많은 측정값이 속한 구간, 동률이면 더 나쁜 구간
@@ -51,12 +53,31 @@
 - `rateRun`은 경계값, 동률, 최악값 제한 케이스를 확인하는 테스트를 둔다 (`tests/rating.test.html` 또는 Node로 실행 가능한 형태)
 - `samples/`에 실제 CSV 샘플을 두고 파싱 결과를 확인한다
 
-## 미확정 사항 (추측해서 구현하지 말고 확인 요청)
-- [ ] META CSV 포맷: 컬럼 구성, 측정위치 이름 표기, 단위(mm/cm), 원시 측정점(3점) 포함 여부
-- [ ] CSV 값에 집계·성분 처리가 이미 반영되어 있는지 (hinge pillar 최댓값, rocker 평균, rocker Y·steering X 성분)
-- [ ] run 이름/ID를 파일명에서 가져올지, CSV 내용에서 가져올지
+## CSV 포맷 (확정)
 
-CSV 포맷이 확정되기 전에는 파서를 매핑 테이블(CSV 표기 → location_key) 방식으로 만들어 수정이 쉽게 한다.
+예시: `samples/R001_baseline.csv`
+
+```
+run_id,location,point,dx_mm,dy_mm,dz_mm,resultant_mm
+1,Lower_Hinge_Pillar,1,66.39,22.63,27.78,75.44
+```
+
+- 파일 1개 = run 1개. 단위 mm, 측정점(`point`)은 원시값 그대로 들어 있다 (집계 안 됨)
+- `run_id`: 데모용 단순 정수 (1, 2, 3 …), CSV 내용에서 읽는다
+- 측정위치 → location_key 매핑과 값 계산 (매핑 테이블로 둬서 수정 쉽게):
+
+| CSV `location` | location_key | 계산 |
+|---|---|---|
+| Lower_Hinge_Pillar | lower_hinge_pillar | 3점 `resultant_mm` **평균** |
+| Footrest | footrest | `resultant_mm` |
+| Left_Toepan | left_toepan | `resultant_mm` |
+| Brake_Pedal | brake_pedal | `resultant_mm` |
+| Parking_Brake_Pedal | parking_brake | `resultant_mm` |
+| Rocker_Panel | rocker_lat | 3점 `dy_mm` **평균** (Y 성분) |
+| Steering_Column | steering_long | `dx_mm` (X 성분) |
+| Upper_Hinge_Pillar | upper_hinge_pillar | 3점 `resultant_mm` **평균** |
+| Upper_Dash | upper_dash | `resultant_mm` |
+| Left_Instrument_Panel | left_ip | `resultant_mm` |
 
 ## 차기 단계 (지금 구현하지 않음)
 - 사내 적용: Google Apps Script 웹앱 + Google Sheet 저장
