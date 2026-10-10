@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Intrusion chart mockup</title>
+<!--
+  IIHS Small Overlap (Protocol VII) intrusion 비교 차트 목업
+  - 순수 HTML + SVG + JavaScript (외부 라이브러리 없음)
+  - 실제 앱 전환 시:
+      1) RUNS 샘플 데이터 → google.script.run 으로 Google Sheet에서 로드
+      2) PROTOCOL 기준값 → 별도 설정 시트/파일로 분리 (프로토콜 버전 관리)
+-->
+<style>
+  :root {
+    --bg: #ffffff; --surface: #f5f4f0; --text: #1f1f1d; --text-2: #5f5e5a; --muted: #898781;
+    --good-t: #3b6d11; --warn-t: #854f0b; --bad-t: #a32d2d; --danger: #a32d2d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a19; --surface: #262624; --text: #f0efec; --text-2: #c3c2b7; --muted: #898781;
+      --good-t: #97c459; --warn-t: #fac775; --bad-t: #f09595; --danger: #f09595;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+         font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 18px; font-weight: 500; margin: 0 0 12px; }
+  .runs { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 12px; font-size: 14px; }
+  .runs label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .swatch { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-bottom: 8px; }
+  .card { background: var(--surface); border-radius: 8px; padding: 8px 12px; }
+  .card .k { font-size: 12px; color: var(--text-2); }
+  .card .v { font-size: 16px; font-weight: 500; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text-2); margin-top: 4px; }
+  .legend span { display: flex; align-items: center; gap: 4px; }
+  #err { font-size: 13px; color: var(--danger); min-height: 1em; margin: 6px 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Small overlap intrusion 비교</h1>
+  <div id="pick" class="runs"></div>
+  <div id="cards" class="cards"></div>
+  <div id="chart"></div>
+  <div class="legend" id="legend"></div>
+  <p id="err"></p>
+</div>
+
+<script>
+// ===== 1. 프로토콜 설정 (IIHS Small Overlap Protocol VII, 단위 cm) =====
+// thresholds: [Good 상한, Acceptable 상한, Marginal 상한], 초과 시 Poor
+// 경계값은 더 좋은 등급으로 판정 (v <= 상한)
+const PROTOCOL = {
+  version: "VII",
+  yMax: 45,
+  locations: [
+    { key: "lower_hinge_pillar", label: "Lower hinge pillar", group: "lower", t: [15, 22.5, 30] },
+    { key: "footrest",           label: "Footrest",           group: "lower", t: [15, 22.5, 30] },
+    { key: "left_toepan",        label: "Left toepan",        group: "lower", t: [15, 22.5, 30] },
+    { key: "brake_pedal",        label: "Brake pedal",        group: "lower", t: [15, 22.5, 30] },
+    { key: "parking_brake",      label: "Parking brake",      group: "lower", t: [15, 22.5, 30] },
+    { key: "rocker_lat",         label: "Rocker (lat)",       group: "lower", t: [5, 10, 15] },
+    { key: "steering_long",      label: "Steering col.",      group: "upper", t: [5, 10, 15] },
+    { key: "upper_hinge_pillar", label: "Upper hinge pillar", group: "upper", t: [7.5, 12.5, 17.5] },
+    { key: "upper_dash",         label: "Upper dash",         group: "upper", t: [7.5, 12.5, 17.5] },
+    { key: "left_ip",            label: "Left IP",            group: "upper", t: [7.5, 12.5, 17.5] },
+  ],
+};
+// 참고: IIHS Figure 15 기준 lower 객실 = lower hinge pillar ~ rocker panel (6개),
+//       upper 객실 = steering column ~ left instrument panel (4개)
+
+// ===== 2. 샘플 run 데이터 (실제: Google Sheet에서 로드) =====
+const RUNS = [
+  { id: "R001", name: "baseline",       values: [9.2, 12.1, 18.4, 8.5, 6.2, 3.1, 4.2, 8.9, 6.1, 13.4] },
+  { id: "R002", name: "A필러 보강",      values: [7.1, 10.3, 16.2, 7.9, 5.8, 2.6, 3.9, 5.2, 4.4, 9.8] },
+  { id: "R003", name: "토판 두께 증가",   values: [6.8, 8.2, 11.5, 6.4, 5.1, 2.4, 3.5, 5.0, 4.1, 9.1] },
+];
+
+// ===== 3. 판정 로직 =====
+const RATINGS = ["Good", "Acceptable", "Marginal", "Poor"];
+const BAND_COLORS = ["#0ca30c", "#fab219", "#ec835a", "#d03b3b"];
+const RATING_TEXT = ["var(--good-t)", "var(--warn-t)", "var(--warn-t)", "var(--bad-t)"];
+
+function bandOf(value, t) {
+  if (value <= t[0]) return 0;
+  if (value <= t[1]) return 1;
+  if (value <= t[2]) return 2;
+  return 3;
+}
+
+// 서브레이팅: 측정값이 가장 많이 속한 구간 (동률이면 더 나쁜 구간),
+// 단 최악 측정값보다 한 단계 넘게 좋을 수 없음
+function subRating(bands) {
+  if (!bands.length) return null;
+  const count = [0, 0, 0, 0];
+  bands.forEach(b => count[b]++);
+  let mode = 0, max = -1;
+  for (let k = 0; k < 4; k++) if (count[k] >= max) { max = count[k]; mode = k; }
+  const worst = Math.max(...bands);
+  return Math.max(mode, worst - 1);
+}
+
+function rateRun(run) {
+  const lower = [], upper = [];
+  PROTOCOL.locations.forEach((loc, i) => {
+    const b = bandOf(run.values[i], loc.t);
+    (loc.group === "lower" ? lower : upper).push(b);
+  });
+  const lo = subRating(lower), up = subRating(upper);
+  return { lower: lo, upper: up, overall: Math.max(lo, up) };
+}
+
+// ===== 4. 차트 렌더링 (SVG) =====
+const isDark = matchMedia("(prefers-color-scheme: dark)").matches;
+const SERIES = isDark ? ["#f0efec", "#3987e5", "#9085e9", "#e87ba4"] : ["#2c2c2a", "#2a78d6", "#6250d6", "#d55181"];
+const INK = isDark ? "#f0efec" : "#2c2c2a";
+const MUTED = "#898781";
+const selected = RUNS.map(() => true);
+
+const W = 720, H = 400, ML = 36, MR = 8, MT = 10, MB = 100;
+const PW = W - ML - MR, PH = H - MT - MB;
+const N = PROTOCOL.locations.length, CW = PW / N;
+const xc = i => ML + CW * (i + 0.5);
+const y = v => MT + PH - (v / PROTOCOL.yMax) * PH;
+
+function fillFor(runIdx) {
+  // 색 + 무늬로 run 구분 (0: 단색, 1: 사선, 2: 점, 3: 단색)
+  if (runIdx % 4 === 1) return `url(#pat-stripe-${runIdx})`;
+  if (runIdx % 4 === 2) return `url(#pat-dot-${runIdx})`;
+  return SERIES[runIdx % SERIES.length];
+}
+
+function patternDefs() {
+  return RUNS.map((_, i) => {
+    const c = SERIES[i % SERIES.length];
+    return `
+      <pattern id="pat-stripe-${i}" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width="4" height="4" fill="${c}"/><rect width="1.2" height="4" fill="#fff" fill-opacity=".55"/>
+      </pattern>
+      <pattern id="pat-dot-${i}" width="4" height="4" patternUnits="userSpaceOnUse">
+        <rect width="4" height="4" fill="${c}"/><circle cx="2" cy="2" r=".9" fill="#fff" fill-opacity=".7"/>
+      </pattern>`;
+  }).join("");
+}
+
+function drawBands() {
+  let s = "";
+  const idx = [...Array(N).keys()];
+  for (let k = 3; k >= 0; k--) {
+    const upper = idx.map(i => (k < 3 ? PROTOCOL.locations[i].t[k] : PROTOCOL.yMax));
+    const pts = [`${ML},${y(upper[0])}`]
+      .concat(idx.map(i => `${xc(i)},${y(upper[i])}`))
+      .concat([`${W - MR},${y(upper[N - 1])}`, `${W - MR},${y(0)}`, `${ML},${y(0)}`]);
+    s += `<polygon points="${pts.join(" ")}" fill="${BAND_COLORS[k]}" fill-opacity="${isDark ? 0.45 : 0.55}"/>`;
+  }
+  return s;
+}
+
+function drawAxes() {
+  let s = "";
+  for (let v = 0; v <= PROTOCOL.yMax; v += 5) {
+    s += `<text x="${ML - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="${MUTED}">${v}</text>`;
+  }
+  s += `<text x="12" y="${MT + PH / 2}" font-size="12" fill="${MUTED}" text-anchor="middle"
+          transform="rotate(-90 12 ${MT + PH / 2})">Measured intrusion (cm)</text>`;
+  PROTOCOL.locations.forEach((loc, i) => {
+    s += `<text x="${xc(i) + 4}" y="${y(0) + 12}" font-size="11" fill="${MUTED}" text-anchor="end"
+            transform="rotate(-45 ${xc(i) + 4} ${y(0) + 12})">${loc.label}</text>`;
+  });
+  // lower / upper 경계선
+  const split = PROTOCOL.locations.findIndex(l => l.group === "upper");
+  if (split > 0) {
+    const x = ML + CW * split;
+    s += `<line x1="${x}" y1="${MT}" x2="${x}" y2="${y(0)}" stroke="${INK}" stroke-dasharray="3 3"/>`;
+  }
+  return s;
+}
+
+function drawBars(active) {
+  let s = "";
+  const n = active.length;
+  const bw = n > 1 ? Math.min(14, (CW - 8) / n) : 20;
+  PROTOCOL.locations.forEach((loc, i) => {
+    active.forEach((ri, j) => {
+      const v = RUNS[ri].values[i];
+      const x = xc(i) - (n * bw) / 2 + j * bw;
+      s += `<rect x="${x}" y="${y(v)}" width="${bw - 1}" height="${y(0) - y(v)}" fill="${fillFor(ri)}" rx="1.5">
+              <title>${RUNS[ri].id} · ${loc.label}: ${v.toFixed(1)} cm</title></rect>`;
+      if (n === 1) {
+        s += `<text x="${xc(i)}" y="${y(v) - 5}" text-anchor="middle" font-size="11" fill="${INK}">${v.toFixed(1)}</text>`;
+      }
+    });
+  });
+  return s;
+}
+
+function draw() {
+  const active = RUNS.map((_, i) => i).filter(i => selected[i]);
+  document.getElementById("err").textContent = active.length ? "" : "비교할 run을 하나 이상 선택하세요.";
+
+  document.getElementById("chart").innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="측정 위치별 intrusion과 IIHS 판정 구간">
+      <defs>${patternDefs()}</defs>
+      ${drawBands()}${drawAxes()}${drawBars(active)}
+    </svg>`;
+
+  document.getElementById("cards").innerHTML = active.map(ri => {
+    const r = rateRun(RUNS[ri]);
+    return `<div class="card">
+      <div class="k">${RUNS[ri].id} 종합</div>
+      <div class="v" style="color:${RATING_TEXT[r.overall]}">${RATINGS[r.overall]}</div>
+      <div class="k">Lower ${RATINGS[r.lower]} · Upper ${RATINGS[r.upper]}</div>
+    </div>`;
+  }).join("");
+}
+
+// ===== 5. UI 초기화 =====
+function swatchStyle(i) {
+  const c = SERIES[i % SERIES.length];
+  let bg = `background:${c};`;
+  if (i % 4 === 1) bg += "background-image:repeating-linear-gradient(45deg,transparent 0 2px,rgba(255,255,255,.6) 2px 3px);";
+  if (i % 4 === 2) bg += "background-image:radial-gradient(rgba(255,255,255,.7) 1px,transparent 1.2px);background-size:4px 4px;";
+  return bg;
+}
+
+const pick = document.getElementById("pick");
+RUNS.forEach((r, i) => {
+  const label = document.createElement("label");
+  label.innerHTML = `<input type="checkbox" data-i="${i}" ${selected[i] ? "checked" : ""}>
+    <span class="swatch" style="${swatchStyle(i)}"></span>${r.id} · ${r.name}`;
+  pick.appendChild(label);
+});
+pick.addEventListener("change", e => { selected[+e.target.dataset.i] = e.target.checked; draw(); });
+
+document.getElementById("legend").innerHTML = RATINGS.map((n, k) =>
+  `<span><span class="swatch" style="background:${BAND_COLORS[k]};opacity:.55"></span>${n}</span>`).join("");
+
+draw();
+</script>
+</body>
+</html>
