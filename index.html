@@ -83,8 +83,19 @@
   th.run label { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 400; cursor: pointer;
                  margin-bottom: 4px; }
   .charted { background-image: linear-gradient(rgba(57,135,229,.10), rgba(57,135,229,.10)); }
-  .chip { display: inline-block; min-width: 22px; margin-left: 6px; padding: 0 4px; border-radius: 3px;
-          font-size: 11px; font-weight: 500; text-align: center; }
+  /* 표 값 셀 바탕색: Good 그린, Acceptable 옐로우, Marginal 레드, Poor 진한 레드 */
+  :root { --cell-g: #cdeec5; --cell-a: #fbe9a6; --cell-m: #f6c3bd; --cell-p: #c62f2f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --cell-g: #2e5320; --cell-a: #66521a; --cell-m: #7a3330; --cell-p: #b02323; }
+  }
+  td.r0 { background: var(--cell-g); }
+  td.r1 { background: var(--cell-a); }
+  td.r2 { background: var(--cell-m); }
+  td.r3 { background: var(--cell-p); color: #fff; font-weight: 600; }
+  td.r0, td.r1, td.r2, td.r3 { border-left: 1px solid var(--bg); }
+  .cell-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text-2); margin: 0 0 6px; }
+  .cell-legend span { display: flex; align-items: center; gap: 4px; }
+  .cell-legend i { width: 14px; height: 12px; border-radius: 2px; display: inline-block; }
 
   #toasts { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex;
             flex-direction: column; gap: 6px; width: min(480px, calc(100% - 32px)); z-index: 10; }
@@ -118,6 +129,10 @@
   </div>
 
   <h2>측정값 (mm) — 열 머리의 "그래프"를 체크하면 위 차트에 그려집니다 (최대 3개)</h2>
+  <div class="cell-legend">
+    <span><i style="background:var(--cell-g)"></i>Good</span><span><i style="background:var(--cell-a)"></i>Acceptable</span>
+    <span><i style="background:var(--cell-m)"></i>Marginal</span><span><i style="background:var(--cell-p)"></i>Poor</span>
+  </div>
   <div class="table-wrap" id="table"></div>
 </div>
 <div id="toasts" aria-live="polite"></div>
@@ -505,7 +520,6 @@ function renderTable(runs) {
     el.innerHTML = `<p class="empty" style="padding:0 12px">${state.runs.length ? "표에 켜진 run이 없습니다. 위 목록에서 켜 주세요." : "불러온 run이 없습니다."}</p>`;
     return;
   }
-  const { dark } = theme();
   const cls = run => (slotOf(run.runId) >= 0 ? "charted" : "");
   const head = `<tr><th>측정위치</th><th>그룹</th><th>기준 G / A / M</th>${runs.map(run => `
     <th class="run ${cls(run)}">
@@ -520,8 +534,7 @@ function renderTable(runs) {
       const v = run.values[loc.key];
       if (!Number.isFinite(v)) return `<td class="${cls(run)}" style="color:var(--muted)">–</td>`;
       const b = bandOf(v, loc.t);
-      return `<td class="${cls(run)}">${fmt(v)}<span class="chip" title="${RATINGS[b]}"
-                style="background:${BAND_COLORS[b]}${dark ? "73" : "4d"};color:${RATING_TEXT[b]}">${RATINGS[b][0]}</span></td>`;
+      return `<td class="r${b}" title="${RATINGS[b]}">${fmt(v)}</td>`;
     }).join("");
     return `<tr class="${prev && prev.group !== loc.group ? "split" : ""}">
       <td>${loc.name}</td><td class="grp">${loc.group}</td><td class="th">${loc.t.join(" / ")}</td>${cells}</tr>`;
