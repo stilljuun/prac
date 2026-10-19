@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Intrusion 뷰어</title>
 <!--
-  IIHS Small Overlap (Protocol VII) intrusion 뷰어 — 로컬 MVP
+  IIHS Small Overlap (Protocol VII) intrusion 뷰어 — 로컬 MVP v1.1
   - 단일 HTML 파일 (HTML + CSS + vanilla JS, 외부 라이브러리 없음, 서버 불필요)
   - 단위는 전부 mm
-  - 출발점: docs/mockup/intrusion_chart_mockup.html
+  - run 폴더 구조: <run 폴더>/<서브폴더>/results.csv  (예: R001_baseline/output/results.csv)
   - Apps Script 전환 시: "데이터 로드" 섹션(FileReader)만 google.script.run 으로 교체
 -->
 <style>
@@ -25,41 +25,64 @@
   * { box-sizing: border-box; }
   body { margin: 0; padding: 16px; background: var(--bg); color: var(--text);
          font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
-  .wrap { max-width: 760px; margin: 0 auto; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
   h1 { font-size: 18px; font-weight: 500; margin: 0 0 12px; }
+  h1 small { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 6px; }
   h2 { font-size: 14px; font-weight: 500; color: var(--text-2); margin: 20px 0 8px; }
+  button { font: inherit; }
+  .btn { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text);
+         font-size: 13px; padding: 5px 12px; cursor: pointer; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-  .drop { display: block; border: 1.5px dashed var(--border); border-radius: 8px; padding: 14px;
-          text-align: center; font-size: 14px; color: var(--text-2); cursor: pointer; }
+  .drop { border: 1.5px dashed var(--border); border-radius: 8px; padding: 14px; text-align: center;
+          font-size: 14px; color: var(--text-2); }
   .drop.over { border-color: var(--accent); background: var(--surface); }
-  .drop b { color: var(--accent); font-weight: 500; }
+  .drop .actions { display: flex; justify-content: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
   .drop input { display: none; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
 
-  .runs { list-style: none; margin: 10px 0 12px; padding: 0; font-size: 14px; }
-  .runs li { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 14px 0 6px; font-size: 13px; color: var(--text-2); }
+  .toolbar .sp { flex: 1; }
+  .toolbar .btn { padding: 3px 10px; font-size: 12px; }
+  .runs { list-style: none; margin: 0 0 12px; padding: 0; font-size: 13px; display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 0 16px; }
+  .runs li { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--border); }
   .runs label { display: flex; align-items: center; gap: 6px; cursor: pointer; flex: 1; min-width: 0; }
-  .runs .file { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .runs button { background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--text-2);
-                 font-size: 12px; padding: 2px 8px; cursor: pointer; }
-  .runs button:hover { color: var(--danger); border-color: var(--danger); }
-  .swatch { width: 12px; height: 12px; border-radius: 2px; display: inline-block; flex: none; }
+  .runs .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .runs .off .nm { color: var(--muted); }
+  .runs .x { background: none; border: none; color: var(--muted); font-size: 12px; padding: 2px 4px; cursor: pointer; }
+  .runs .x:hover { color: var(--danger); }
+  .swatch { width: 12px; height: 12px; border-radius: 2px; display: inline-block; flex: none; vertical-align: -1px; }
+  .swatch.none { visibility: hidden; }
   .empty { font-size: 13px; color: var(--muted); margin: 10px 0; }
 
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-bottom: 8px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; margin-bottom: 8px; }
   .card { background: var(--surface); border-radius: 8px; padding: 8px 12px; }
   .card .k { font-size: 12px; color: var(--text-2); }
   .card .v { font-size: 16px; font-weight: 500; }
   .card .w { font-size: 12px; color: var(--danger); }
+  .chart-box { max-width: 820px; margin: 0 auto; }
   .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text-2); margin-top: 4px; }
   .legend span { display: flex; align-items: center; gap: 4px; }
 
-  .table-wrap { overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
-  th, td { padding: 5px 8px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
-  th { font-weight: 500; color: var(--text-2); }
-  th:first-child, td:first-child, td.grp { text-align: left; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 5px 10px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; background: var(--bg); }
+  th { font-weight: 500; color: var(--text-2); vertical-align: bottom; }
+  th:first-child, td:first-child { text-align: left; position: sticky; left: 0; z-index: 1;
+                                   border-right: 1px solid var(--border); }
   td.grp, td.th { color: var(--muted); }
+  td.grp { text-align: left; }
   tr.split td { border-top: 2px dashed var(--muted); }
+  tr.rating td { background: var(--surface); font-weight: 500; }
+  tr.rating.first td { border-top: 2px solid var(--border); }
+  th.run { min-width: 96px; max-width: 140px; white-space: normal; }
+  th.run .rid { color: var(--text); }
+  th.run .rnm { font-size: 11px; font-weight: 400; color: var(--muted); overflow-wrap: anywhere; }
+  th.run label { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 400; cursor: pointer;
+                 margin-bottom: 4px; }
+  .charted { background-image: linear-gradient(rgba(57,135,229,.10), rgba(57,135,229,.10)); }
   .chip { display: inline-block; min-width: 22px; margin-left: 6px; padding: 0 4px; border-radius: 3px;
           font-size: 11px; font-weight: 500; text-align: center; }
 
@@ -72,19 +95,29 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Small overlap intrusion 뷰어</h1>
+  <h1>Small overlap intrusion 뷰어 <small>v1.1</small></h1>
 
-  <label class="drop" id="drop">
+  <div class="drop" id="drop">
+    run 폴더(또는 여러 run 폴더가 든 상위 폴더)나 CSV 파일을 여기에 끌어다 놓으세요
+    <div class="actions">
+      <button type="button" class="btn primary" id="pickFolder">폴더 선택</button>
+      <button type="button" class="btn" id="pickFile">CSV 파일 선택</button>
+    </div>
+    <div class="hint">폴더를 고르면 하위 폴더의 <code>results.csv</code>를 모두 불러옵니다. run 이름은 run 폴더 이름에서 가져옵니다.</div>
+    <input type="file" id="folder" webkitdirectory multiple>
     <input type="file" id="file" accept=".csv,text/csv" multiple>
-    CSV 파일을 여기에 끌어다 놓거나 <b>클릭해서 선택</b> (여러 개 가능, 파일 1개 = run 1개)
-  </label>
+  </div>
+
+  <div class="toolbar" id="toolbar"></div>
   <ul class="runs" id="runs"></ul>
 
   <div id="cards" class="cards"></div>
-  <div id="chart"></div>
-  <div class="legend" id="legend"></div>
+  <div class="chart-box">
+    <div id="chart"></div>
+    <div class="legend" id="legend"></div>
+  </div>
 
-  <h2>측정값 (mm)</h2>
+  <h2>측정값 (mm) — 열 머리의 "그래프"를 체크하면 위 차트에 그려집니다 (최대 3개)</h2>
   <div class="table-wrap" id="table"></div>
 </div>
 <div id="toasts" aria-live="polite"></div>
@@ -127,12 +160,39 @@ const CSV_MAP = {
   Left_Instrument_Panel: { key: "left_ip",            field: "resultant_mm" },
 };
 
-// "R001_baseline.csv" → "baseline", "R002_A-pillar_reinforced.csv" → "A-pillar reinforced"
+const RESULT_FILE = "results.csv";
+
+// "R001_baseline.csv" / "R001_baseline" → "baseline", "R002_A-pillar_reinforced" → "A-pillar reinforced"
 function nameFromFile(fileName) {
   return fileName.replace(/\.csv$/i, "").replace(/^R\d+_/i, "").replace(/_/g, " ");
 }
 
-function parseCsv(text, fileName) {
+// results.csv 경로에서 run 폴더 이름: <run 폴더>/<서브폴더>/results.csv
+// "runs/R001_baseline/output/results.csv" → "R001_baseline", "output/results.csv" 처럼 얕으면 바로 위 폴더
+function runFolderOf(path) {
+  const dirs = path.split(/[\\/]/).filter(Boolean).slice(0, -1);
+  if (dirs.length >= 2) return dirs[dirs.length - 2];
+  return dirs.length ? dirs[0] : null;
+}
+
+// 폴더/파일 목록 → 읽을 대상. 폴더 안에서는 results.csv 만, 폴더 밖에 놓인 CSV는 파일명으로
+function pickCsvTargets(paths) {
+  const targets = [], skipped = [];
+  paths.forEach(path => {
+    const parts = path.split(/[\\/]/).filter(Boolean);
+    const base = parts[parts.length - 1];
+    if (parts.length > 1 && base.toLowerCase() === RESULT_FILE) {
+      targets.push({ path, name: nameFromFile(runFolderOf(path)) });
+    } else if (parts.length === 1 && /\.csv$/i.test(base)) {
+      targets.push({ path, name: nameFromFile(base) });
+    } else {
+      skipped.push(path);
+    }
+  });
+  return { targets, skipped };
+}
+
+function parseCsv(text, fileName, runName) {
   const lines = text.replace(/^﻿/, "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   if (lines.length < 2) throw new Error(`${fileName}: 데이터 행이 없습니다.`);
   const header = lines[0].split(",").map(h => h.trim());
@@ -167,7 +227,7 @@ function parseCsv(text, fileName) {
   const missing = PROTOCOL.locations.filter(l => !(l.key in values)).map(l => l.name);
   if (missing.length) warnings.push(`누락된 측정위치: ${missing.join(", ")}`);
 
-  return { runId: ids[0], name: nameFromFile(fileName), fileName, values, warnings };
+  return { runId: ids[0], name: runName || nameFromFile(fileName), fileName, values, warnings };
 }
 
 // ===== 3. 판정 로직 =====
@@ -203,37 +263,67 @@ function rateRun(run) {
   const overall = lower === null || upper === null ? null : Math.max(lower, upper);
   return { lower, upper, overall };
 }
+
+// ===== 4. 그래프 선택 (최대 3개) =====
+// slots: 길이 CHART_MAX 배열 (runId 또는 null). 색·무늬는 slot 위치로 고정 → 다른 run을 빼도 색이 안 바뀜
+const CHART_MAX = 3;
+
+function toggleChart(slots, runId) {
+  const s = slots.slice(), i = s.indexOf(runId);
+  if (i >= 0) { s[i] = null; return { slots: s, ok: true }; }
+  const empty = s.indexOf(null);
+  if (empty < 0) return { slots, ok: false };
+  s[empty] = runId;
+  return { slots: s, ok: true };
+}
+
+function removeFromChart(slots, runId) {
+  return slots.map(id => (id === runId ? null : id));
+}
 // @core-end
 
-// ===== 4. 상태 =====
-const state = { runs: [], selected: {} };   // runs: runId 순 정렬, selected: { runId: bool }
+// ===== 5. 상태 =====
+// runs: runId 순 정렬, shown: 표 ON/OFF { runId: bool }, slots: 그래프 칸 (최대 3)
+const state = { runs: [], shown: {}, slots: Array(CHART_MAX).fill(null) };
 
 function compareId(a, b) {
   const na = Number(a), nb = Number(b);
   return Number.isFinite(na) && Number.isFinite(nb) ? na - nb : String(a).localeCompare(String(b));
 }
 
-// 같은 run_id 가 이미 있으면 새 파일로 교체하고 알린다
+// 같은 run_id 가 이미 있으면 새 파일로 교체 (표·그래프 선택 상태는 유지). 교체됐으면 true
 function addRun(run) {
   const i = state.runs.findIndex(r => r.runId === run.runId);
-  if (i >= 0) {
-    notify(`run ${run.runId} 을(를) 새 파일로 교체했습니다: ${state.runs[i].fileName} → ${run.fileName}`);
-    state.runs[i] = run;
-  } else {
+  if (i >= 0) state.runs[i] = run;
+  else {
     state.runs.push(run);
     state.runs.sort((a, b) => compareId(a.runId, b.runId));
+    state.shown[run.runId] = true;
   }
-  state.selected[run.runId] = true;
-  run.warnings.forEach(w => notify(`${run.fileName}: ${w}`, "error"));
+  return i >= 0;
+}
+
+// 새로 불러온 run은 그래프 빈 칸이 있으면 run_id 순으로 채운다
+function autoFillChart(newIds) {
+  newIds.slice().sort(compareId).forEach(id => {
+    if (state.slots.includes(id)) return;
+    const r = toggleChart(state.slots, id);
+    if (r.ok) state.slots = r.slots;
+  });
+}
+
+function setShown(runId, on) {
+  state.shown[runId] = on;
+  if (!on) state.slots = removeFromChart(state.slots, runId);
 }
 
 function removeRun(runId) {
   state.runs = state.runs.filter(r => r.runId !== runId);
-  delete state.selected[runId];
-  render();
+  delete state.shown[runId];
+  state.slots = removeFromChart(state.slots, runId);
 }
 
-// ===== 5. 데이터 로드 (Apps Script 전환 시 google.script.run 으로 교체할 자리) =====
+// ===== 6. 데이터 로드 (Apps Script 전환 시 google.script.run 으로 교체할 자리) =====
 function readFileText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -243,49 +333,81 @@ function readFileText(file) {
   });
 }
 
-async function loadFiles(files) {
-  for (const file of files) {
-    if (!/\.csv$/i.test(file.name)) { notify(`${file.name}: CSV 파일이 아닙니다.`, "error"); continue; }
+// 드롭된 항목에서 폴더를 재귀로 펼쳐 [{ file, path }] 로 만든다
+async function entriesFromDrop(dataTransfer) {
+  // dataTransfer 는 이벤트가 끝나면 비워지므로 항목을 먼저 동기적으로 꺼내 둔다
+  const entries = [...dataTransfer.items].map(it => it.webkitGetAsEntry && it.webkitGetAsEntry()).filter(Boolean);
+  if (!entries.length) return [...dataTransfer.files].map(f => ({ file: f, path: f.name }));
+  const out = [];
+  async function walk(entry, prefix) {
+    if (entry.isFile) {
+      const file = await new Promise((res, rej) => entry.file(res, rej));
+      out.push({ file, path: prefix + file.name });
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      let batch;
+      do {
+        batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+        for (const e of batch) await walk(e, prefix + entry.name + "/");
+      } while (batch.length);
+    }
+  }
+  for (const e of entries) await walk(e, "");
+  return out;
+}
+
+async function loadEntries(items) {
+  const byPath = new Map(items.map(it => [it.path, it.file]));
+  const { targets } = pickCsvTargets([...byPath.keys()]);
+  if (!targets.length) {
+    notify(`불러올 CSV가 없습니다. 폴더 안에서는 ${RESULT_FILE} 만 읽습니다.`, "error");
+    return;
+  }
+  const added = [], replaced = [];
+  for (const t of targets) {
     try {
-      addRun(parseCsv(await readFileText(file), file.name));
+      const run = parseCsv(await readFileText(byPath.get(t.path)), t.path, t.name);
+      (addRun(run) ? replaced : added).push(run.runId);
+      run.warnings.forEach(w => notify(`${t.path}: ${w}`, "error"));
     } catch (e) {
       notify(e.message, "error");
     }
   }
+  autoFillChart(added);
+  if (added.length) notify(`run ${added.length}개를 불러왔습니다.`);
+  if (replaced.length) notify(`같은 run_id 를 새 파일로 교체했습니다: run ${replaced.sort(compareId).join(", ")}`);
   render();
 }
 
-// ===== 6. 렌더링 =====
+// ===== 7. 렌더링 =====
 const BAND_COLORS = ["#0ca30c", "#fab219", "#ec835a", "#d03b3b"];
 const RATING_TEXT = ["var(--good-t)", "var(--warn-t)", "var(--warn-t)", "var(--bad-t)"];
 const darkQuery = matchMedia("(prefers-color-scheme: dark)");
 const theme = () => darkQuery.matches
-  ? { dark: true,  series: ["#f0efec", "#3987e5", "#9085e9", "#e87ba4"], ink: "#f0efec" }
-  : { dark: false, series: ["#2c2c2a", "#2a78d6", "#6250d6", "#d55181"], ink: "#2c2c2a" };
+  ? { dark: true,  series: ["#f0efec", "#3987e5", "#e87ba4"], ink: "#f0efec" }
+  : { dark: false, series: ["#2c2c2a", "#2a78d6", "#d55181"], ink: "#2c2c2a" };
 const MUTED = "#898781";
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = v => (Number.isFinite(v) ? v.toFixed(1) : "–");
 const ratingName = r => (r === null ? "–" : RATINGS[r]);
 
-// run 구분: 색 4가지 × 무늬 3가지 (단색 / 사선 / 점). slot = 불러온 run 목록에서의 순번
-const colorOf = slot => theme().series[slot % 4];
-const patternOf = slot => (slot + Math.floor(slot / 4)) % 3;   // 0 단색, 1 사선, 2 점
-const slotOf = run => state.runs.indexOf(run);
+// 그래프 칸별 색·무늬: 1번째 단색, 2번째 사선, 3번째 점
+const slotOf = runId => state.slots.indexOf(runId);
+const colorOf = slot => theme().series[slot];
 
 function fillFor(slot) {
-  const p = patternOf(slot);
-  if (p === 1) return `url(#pat-stripe-${slot})`;
-  if (p === 2) return `url(#pat-dot-${slot})`;
+  if (slot === 1) return `url(#pat-stripe-${slot})`;
+  if (slot === 2) return `url(#pat-dot-${slot})`;
   return colorOf(slot);
 }
 
-function swatchStyle(slot) {
+function swatch(slot) {
+  if (slot < 0) return `<span class="swatch none" title="그래프에 없음"></span>`;
   let bg = `background:${colorOf(slot)};`;
-  const p = patternOf(slot);
-  if (p === 1) bg += "background-image:repeating-linear-gradient(45deg,transparent 0 2px,rgba(255,255,255,.6) 2px 3px);";
-  if (p === 2) bg += "background-image:radial-gradient(rgba(255,255,255,.7) 1px,transparent 1.2px);background-size:4px 4px;";
-  return bg;
+  if (slot === 1) bg += "background-image:repeating-linear-gradient(45deg,transparent 0 2px,rgba(255,255,255,.6) 2px 3px);";
+  if (slot === 2) bg += "background-image:radial-gradient(rgba(255,255,255,.7) 1px,transparent 1.2px);background-size:4px 4px;";
+  return `<span class="swatch" style="${bg}"></span>`;
 }
 
 const W = 720, H = 400, ML = 40, MR = 8, MT = 10, MB = 100;
@@ -293,21 +415,20 @@ const PW = W - ML - MR, PH = H - MT - MB;
 const N = PROTOCOL.locations.length, CW = PW / N;
 const xc = i => ML + CW * (i + 0.5);
 
+// runs: 그래프에 그릴 run (slot 순서)
 function renderChart(runs) {
   const { dark, ink } = theme();
   const maxV = Math.max(0, ...runs.flatMap(r => Object.values(r.values)));
   const yMax = Math.max(PROTOCOL.yMax, Math.ceil(maxV / PROTOCOL.yStep) * PROTOCOL.yStep);
   const y = v => MT + PH - (Math.min(v, yMax) / yMax) * PH;
 
-  const defs = runs.map(r => {
-    const s = slotOf(r), c = colorOf(s);
-    return `
-      <pattern id="pat-stripe-${s}" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-        <rect width="4" height="4" fill="${c}"/><rect width="1.2" height="4" fill="#fff" fill-opacity=".55"/>
-      </pattern>
-      <pattern id="pat-dot-${s}" width="4" height="4" patternUnits="userSpaceOnUse">
-        <rect width="4" height="4" fill="${c}"/><circle cx="2" cy="2" r=".9" fill="#fff" fill-opacity=".7"/>
-      </pattern>`;
+  const defs = [1, 2].map(s => {
+    const c = colorOf(s);
+    return s === 1
+      ? `<pattern id="pat-stripe-1" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+           <rect width="4" height="4" fill="${c}"/><rect width="1.2" height="4" fill="#fff" fill-opacity=".55"/></pattern>`
+      : `<pattern id="pat-dot-2" width="4" height="4" patternUnits="userSpaceOnUse">
+           <rect width="4" height="4" fill="${c}"/><circle cx="2" cy="2" r=".9" fill="#fff" fill-opacity=".7"/></pattern>`;
   }).join("");
 
   // 판정구간 배경
@@ -347,26 +468,29 @@ function renderChart(runs) {
       const v = run.values[loc.key];
       if (!Number.isFinite(v)) return;
       const x = xc(i) - (n * bw) / 2 + j * bw;
-      bars += `<rect x="${x}" y="${y(v)}" width="${bw - 1}" height="${y(0) - y(v)}" fill="${fillFor(slotOf(run))}" rx="1.5">
+      bars += `<rect x="${x}" y="${y(v)}" width="${bw - 1}" height="${y(0) - y(v)}" fill="${fillFor(slotOf(run.runId))}" rx="1.5">
                  <title>run ${esc(run.runId)} · ${loc.name}: ${fmt(v)} mm</title></rect>`;
       if (n === 1) {
         bars += `<text x="${xc(i)}" y="${y(v) - 5}" text-anchor="middle" font-size="11" fill="${ink}">${fmt(v)}</text>`;
       }
     });
   });
+  const hint = n ? "" : `<text x="${ML + PW / 2}" y="${MT + 24}" text-anchor="middle" font-size="13" fill="${ink}">
+                          아래 표에서 "그래프"를 체크하면 여기에 그려집니다 (최대 ${CHART_MAX}개)</text>`;
 
   document.getElementById("chart").innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="측정 위치별 intrusion과 IIHS 판정 구간">
-      <defs>${defs}</defs>${bands}${axes}${bars}
+      <defs>${defs}</defs>${bands}${axes}${bars}${hint}
     </svg>`;
 }
 
+// runs: 그래프에 그린 run (최대 3개)
 function renderCards(runs) {
   document.getElementById("cards").innerHTML = runs.map(run => {
     const r = rateRun(run);
     const missing = PROTOCOL.locations.filter(l => !Number.isFinite(run.values[l.key])).length;
     return `<div class="card">
-      <div class="k"><span class="swatch" style="${swatchStyle(slotOf(run))}"></span> run ${esc(run.runId)} · ${esc(run.name)}</div>
+      <div class="k">${swatch(slotOf(run.runId))} run ${esc(run.runId)} · ${esc(run.name)}</div>
       <div class="v" style="color:${r.overall === null ? "var(--muted)" : RATING_TEXT[r.overall]}">${ratingName(r.overall)}</div>
       <div class="k">Lower ${ratingName(r.lower)} · Upper ${ratingName(r.upper)}</div>
       ${missing ? `<div class="w">측정위치 ${missing}개 누락</div>` : ""}
@@ -374,48 +498,74 @@ function renderCards(runs) {
   }).join("");
 }
 
+// runs: 표 ON 인 run 전부 (개수 제한 없음)
 function renderTable(runs) {
   const el = document.getElementById("table");
-  if (!runs.length) { el.innerHTML = `<p class="empty">선택한 run이 없습니다.</p>`; return; }
+  if (!runs.length) {
+    el.innerHTML = `<p class="empty" style="padding:0 12px">${state.runs.length ? "표에 켜진 run이 없습니다. 위 목록에서 켜 주세요." : "불러온 run이 없습니다."}</p>`;
+    return;
+  }
   const { dark } = theme();
-  const head = `<tr><th>측정위치</th><th>그룹</th><th>기준 G / A / M</th>${
-    runs.map(r => `<th><span class="swatch" style="${swatchStyle(slotOf(r))}"></span> run ${esc(r.runId)}</th>`).join("")}</tr>`;
+  const cls = run => (slotOf(run.runId) >= 0 ? "charted" : "");
+  const head = `<tr><th>측정위치</th><th>그룹</th><th>기준 G / A / M</th>${runs.map(run => `
+    <th class="run ${cls(run)}">
+      <label><input type="checkbox" data-chart="${esc(run.runId)}" ${slotOf(run.runId) >= 0 ? "checked" : ""}>그래프</label>
+      <div class="rid">${swatch(slotOf(run.runId))} run ${esc(run.runId)}</div>
+      <div class="rnm">${esc(run.name)}</div>
+    </th>`).join("")}</tr>`;
+
   const body = PROTOCOL.locations.map((loc, i) => {
     const prev = PROTOCOL.locations[i - 1];
     const cells = runs.map(run => {
       const v = run.values[loc.key];
-      if (!Number.isFinite(v)) return `<td style="color:var(--muted)">–</td>`;
+      if (!Number.isFinite(v)) return `<td class="${cls(run)}" style="color:var(--muted)">–</td>`;
       const b = bandOf(v, loc.t);
-      return `<td>${fmt(v)}<span class="chip" title="${RATINGS[b]}"
+      return `<td class="${cls(run)}">${fmt(v)}<span class="chip" title="${RATINGS[b]}"
                 style="background:${BAND_COLORS[b]}${dark ? "73" : "4d"};color:${RATING_TEXT[b]}">${RATINGS[b][0]}</span></td>`;
     }).join("");
     return `<tr class="${prev && prev.group !== loc.group ? "split" : ""}">
       <td>${loc.name}</td><td class="grp">${loc.group}</td><td class="th">${loc.t.join(" / ")}</td>${cells}</tr>`;
   }).join("");
-  el.innerHTML = `<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
+
+  // 판정 결과 줄: Lower / Upper / 종합
+  const ratings = runs.map(rateRun);
+  const ratingRow = (label, key, first) => `<tr class="rating${first ? " first" : ""}"><td>${label}</td><td></td><td></td>${
+    ratings.map((r, j) => `<td class="${cls(runs[j])}" style="color:${r[key] === null ? "var(--muted)" : RATING_TEXT[r[key]]}">${ratingName(r[key])}</td>`).join("")}</tr>`;
+  const foot = ratingRow("Lower 판정", "lower", true) + ratingRow("Upper 판정", "upper") + ratingRow("종합 판정", "overall");
+
+  el.innerHTML = `<table><thead>${head}</thead><tbody>${body}${foot}</tbody></table>`;
 }
 
 function renderRunList() {
+  const shownCount = state.runs.filter(r => state.shown[r.runId]).length;
+  const charted = state.slots.filter(id => id !== null).length;
+  document.getElementById("toolbar").innerHTML = state.runs.length ? `
+    <span>불러온 run ${state.runs.length}개 · 표 ${shownCount}개 · 그래프 ${charted}/${CHART_MAX}</span>
+    <span class="sp"></span>
+    <button type="button" class="btn" data-act="all-on">표 전체 켜기</button>
+    <button type="button" class="btn" data-act="all-off">표 전체 끄기</button>
+    <button type="button" class="btn" data-act="clear">전체 삭제</button>` : "";
+
   const el = document.getElementById("runs");
   if (!state.runs.length) {
-    el.innerHTML = `<li class="empty">불러온 run이 없습니다. samples/ 폴더의 CSV로 시작해 보세요.</li>`;
+    el.innerHTML = `<li class="empty" style="border:none">불러온 run이 없습니다. samples/runs 폴더로 시작해 보세요.</li>`;
     return;
   }
   el.innerHTML = state.runs.map(r => `
-    <li>
-      <label><input type="checkbox" data-id="${esc(r.runId)}" ${state.selected[r.runId] ? "checked" : ""}>
-        <span class="swatch" style="${swatchStyle(slotOf(r))}"></span>
-        run ${esc(r.runId)} · ${esc(r.name)} <span class="file">${esc(r.fileName)}</span></label>
-      <button type="button" data-remove="${esc(r.runId)}">삭제</button>
+    <li class="${state.shown[r.runId] ? "" : "off"}" title="${esc(r.fileName)}">
+      <label><input type="checkbox" data-show="${esc(r.runId)}" ${state.shown[r.runId] ? "checked" : ""}>
+        ${swatch(slotOf(r.runId))}<span class="nm">run ${esc(r.runId)} · ${esc(r.name)}</span></label>
+      <button type="button" class="x" data-remove="${esc(r.runId)}" aria-label="run ${esc(r.runId)} 삭제">삭제</button>
     </li>`).join("");
 }
 
 function render() {
-  const active = state.runs.filter(r => state.selected[r.runId]);
+  const shown = state.runs.filter(r => state.shown[r.runId]);
+  const charted = state.slots.filter(id => id !== null).map(id => state.runs.find(r => r.runId === id)).filter(Boolean);
   renderRunList();
-  renderCards(active);
-  renderChart(active);
-  renderTable(active);
+  renderCards(charted);
+  renderChart(charted);
+  renderTable(shown);
 }
 
 function notify(message, kind) {
@@ -426,25 +576,58 @@ function notify(message, kind) {
   setTimeout(() => box.remove(), kind === "error" ? 7000 : 4000);
 }
 
-// ===== 7. UI 초기화 =====
+// ===== 8. UI 초기화 =====
+const folderInput = document.getElementById("folder");
 const fileInput = document.getElementById("file");
-fileInput.addEventListener("change", () => { loadFiles([...fileInput.files]); fileInput.value = ""; });
+document.getElementById("pickFolder").addEventListener("click", () => folderInput.click());
+document.getElementById("pickFile").addEventListener("click", () => fileInput.click());
+folderInput.addEventListener("change", () => {
+  loadEntries([...folderInput.files].map(f => ({ file: f, path: f.webkitRelativePath || f.name })));
+  folderInput.value = "";
+});
+fileInput.addEventListener("change", () => {
+  loadEntries([...fileInput.files].map(f => ({ file: f, path: f.name })));
+  fileInput.value = "";
+});
 
 const drop = document.getElementById("drop");
 ["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
 ["dragleave", "drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
-drop.addEventListener("drop", e => loadFiles([...e.dataTransfer.files]));
+drop.addEventListener("drop", async e => loadEntries(await entriesFromDrop(e.dataTransfer)));
 // 드롭 영역 밖에 떨어뜨려도 브라우저가 파일을 열지 않도록
 ["dragover", "drop"].forEach(t => window.addEventListener(t, e => e.preventDefault()));
 
+document.getElementById("toolbar").addEventListener("click", e => {
+  const act = e.target.dataset.act;
+  if (!act) return;
+  if (act === "all-on") state.runs.forEach(r => setShown(r.runId, true));
+  if (act === "all-off") state.runs.forEach(r => setShown(r.runId, false));
+  if (act === "clear") {
+    if (!confirm(`불러온 run ${state.runs.length}개를 모두 목록에서 뺄까요? (파일은 지워지지 않습니다)`)) return;
+    state.runs.slice().forEach(r => removeRun(r.runId));
+  }
+  render();
+});
+
 const runList = document.getElementById("runs");
 runList.addEventListener("change", e => {
-  if (e.target.dataset.id === undefined) return;
-  state.selected[e.target.dataset.id] = e.target.checked;
+  if (e.target.dataset.show === undefined) return;
+  setShown(e.target.dataset.show, e.target.checked);
   render();
 });
 runList.addEventListener("click", e => {
-  if (e.target.dataset.remove !== undefined) removeRun(e.target.dataset.remove);
+  if (e.target.dataset.remove === undefined) return;
+  removeRun(e.target.dataset.remove);
+  render();
+});
+
+document.getElementById("table").addEventListener("change", e => {
+  const id = e.target.dataset.chart;
+  if (id === undefined) return;
+  const r = toggleChart(state.slots, id);
+  if (!r.ok) notify(`그래프는 최대 ${CHART_MAX}개까지 그릴 수 있습니다. 다른 run의 체크를 먼저 해제하세요.`, "error");
+  state.slots = r.slots;
+  render();
 });
 
 document.getElementById("legend").innerHTML = RATINGS.map((n, k) =>

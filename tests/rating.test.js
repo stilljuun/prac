@@ -10,8 +10,8 @@ const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const core = html.slice(html.indexOf("// @core-start"), html.indexOf("// @core-end"));
 const ctx = {};
 vm.createContext(ctx);
-vm.runInContext(core + "\nObject.assign(this, { PROTOCOL, parseCsv, bandOf, subRating, rateRun });", ctx);
-const { PROTOCOL, parseCsv, bandOf, subRating, rateRun } = ctx;
+vm.runInContext(core + "\nObject.assign(this, { PROTOCOL, parseCsv, bandOf, subRating, rateRun, runFolderOf, pickCsvTargets, toggleChart, removeFromChart });", ctx);
+const { PROTOCOL, parseCsv, bandOf, subRating, rateRun, runFolderOf, pickCsvTargets, toggleChart, removeFromChart } = ctx;
 
 const G = 0, A = 1, M = 2, P = 3;
 let passed = 0;
@@ -94,6 +94,53 @@ test("샘플 판정 결과", () => {
   assert.deepStrictEqual({ ...r1 }, { lower: G, upper: A, overall: A });
   assert.deepStrictEqual({ ...rateRun(sample("R002_A-pillar_reinforced.csv")) }, { lower: G, upper: G, overall: G });
   assert.deepStrictEqual({ ...rateRun(sample("R003_toepan_thickness_up.csv")) }, { lower: G, upper: G, overall: G });
+});
+
+// ----- run 폴더 구조: <run 폴더>/<서브폴더>/results.csv -----
+test("runFolderOf: results.csv 두 단계 위 폴더가 run 폴더", () => {
+  assert.strictEqual(runFolderOf("runs/R001_baseline/output/results.csv"), "R001_baseline");
+  assert.strictEqual(runFolderOf("R001_baseline/output/results.csv"), "R001_baseline");
+  assert.strictEqual(runFolderOf("C:\\data\\R007_x\\post\\results.csv"), "R007_x");
+});
+test("pickCsvTargets: 폴더 안에서는 results.csv 만, 낱개 CSV는 파일명으로", () => {
+  const { targets, skipped } = pickCsvTargets([
+    "runs/R001_baseline/output/results.csv",
+    "runs/R001_baseline/output/log.csv",
+    "runs/R001_baseline/output/model.key",
+    "R003_toepan_thickness_up.csv",
+  ]);
+  assert.deepStrictEqual([...targets.map(t => t.name)], ["baseline", "toepan thickness up"]);
+  assert.strictEqual(skipped.length, 2);
+});
+test("samples/runs 10개 폴더 모두 파싱", () => {
+  const dir = path.join(root, "samples", "runs");
+  const folders = fs.readdirSync(dir).sort();
+  assert.strictEqual(folders.length, 10);
+  const runs = folders.map(f => {
+    const rel = `${f}/output/results.csv`;
+    const [t] = pickCsvTargets([rel]).targets;
+    return parseCsv(fs.readFileSync(path.join(dir, rel), "utf8"), rel, t.name);
+  });
+  assert.deepStrictEqual(runs.map(r => r.runId), ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
+  runs.forEach(r => assert.deepStrictEqual([...r.warnings], [], r.fileName));
+  assert.strictEqual(runs[7].name, "lightweight floor");
+  // run 8: toepan 322 mm(Poor) → lower 는 최악값 제한으로 Marginal
+  assert.deepStrictEqual({ ...rateRun(runs[7]) }, { lower: M, upper: A, overall: M });
+});
+
+// ----- 그래프 선택 (최대 3개, 칸 위치 고정) -----
+test("toggleChart: 빈 칸 채우기, 최대 3개, 해제 후 같은 칸 재사용", () => {
+  let s = [null, null, null];
+  s = toggleChart(s, "1").slots; s = toggleChart(s, "2").slots; s = toggleChart(s, "3").slots;
+  assert.deepStrictEqual([...s], ["1", "2", "3"]);
+  const full = toggleChart(s, "4");
+  assert.strictEqual(full.ok, false);
+  assert.deepStrictEqual([...full.slots], ["1", "2", "3"]);
+  s = toggleChart(s, "2").slots;                 // 2 해제 → 가운데 칸 비움 (1, 3 색 유지)
+  assert.deepStrictEqual([...s], ["1", null, "3"]);
+  s = toggleChart(s, "4").slots;
+  assert.deepStrictEqual([...s], ["1", "4", "3"]);
+  assert.deepStrictEqual([...removeFromChart(s, "1")], [null, "4", "3"]);
 });
 
 // ----- 오류/경고 -----
