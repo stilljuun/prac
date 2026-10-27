@@ -5,10 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Intrusion 뷰어</title>
 <!--
-  IIHS Small Overlap (Protocol VII) intrusion 뷰어 — 로컬 MVP v1.1
+  IIHS 구조(intrusion) 뷰어 — 로컬 MVP v1.2
+  - 시험 3종을 탭으로 구분: Small overlap 운전석 / Small overlap 조수석 / Moderate overlap 2.0
   - 단일 HTML 파일 (HTML + CSS + vanilla JS, 외부 라이브러리 없음, 서버 불필요)
   - 단위는 전부 mm
   - run 폴더 구조: <run 폴더>/<서브폴더>/results.csv  (예: R001_baseline/output/results.csv)
+  - 시험 종류는 CSV 의 측정위치(location) 이름으로 자동 구분해 해당 탭에 넣는다
   - Apps Script 전환 시: "데이터 로드" 섹션(FileReader)만 google.script.run 으로 교체
 -->
 <style>
@@ -41,6 +43,16 @@
   .drop .actions { display: flex; justify-content: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
   .drop input { display: none; }
   .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  .tabs { display: flex; gap: 4px; margin: 16px 0 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .tab { background: none; border: 1px solid transparent; border-bottom: none; border-radius: 8px 8px 0 0;
+         color: var(--text-2); font-size: 14px; padding: 8px 14px; cursor: pointer; white-space: nowrap; margin-bottom: -1px; }
+  .tab:hover { color: var(--text); }
+  .tab[aria-selected="true"] { background: var(--bg); border-color: var(--border); color: var(--text); font-weight: 500; }
+  .tab .cnt { display: inline-block; min-width: 20px; margin-left: 6px; padding: 0 6px; border-radius: 10px;
+              background: var(--surface); color: var(--text-2); font-size: 11px; font-weight: 500; text-align: center; }
+  .tab[aria-selected="true"] .cnt { background: var(--accent); color: #fff; }
+  .src { font-size: 12px; color: var(--muted); margin: 8px 0 0; line-height: 1.5; }
 
   .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 14px 0 6px; font-size: 13px; color: var(--text-2); }
   .toolbar .sp { flex: 1; }
@@ -106,7 +118,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Small overlap intrusion 뷰어 <small>v1.1</small></h1>
+  <h1>IIHS 구조 intrusion 뷰어 <small>v1.2</small></h1>
 
   <div class="drop" id="drop">
     run 폴더(또는 여러 run 폴더가 든 상위 폴더)나 CSV 파일을 여기에 끌어다 놓으세요
@@ -114,10 +126,14 @@
       <button type="button" class="btn primary" id="pickFolder">폴더 선택</button>
       <button type="button" class="btn" id="pickFile">CSV 파일 선택</button>
     </div>
-    <div class="hint">폴더를 고르면 하위 폴더의 <code>results.csv</code>를 모두 불러옵니다. run 이름은 run 폴더 이름에서 가져옵니다.</div>
+    <div class="hint">폴더를 고르면 하위 폴더의 <code>results.csv</code>를 모두 불러옵니다. run 이름은 run 폴더 이름에서,
+      시험 종류는 CSV 의 측정위치 이름에서 자동으로 구분해 해당 탭에 넣습니다.</div>
     <input type="file" id="folder" webkitdirectory multiple>
     <input type="file" id="file" accept=".csv,text/csv" multiple>
   </div>
+
+  <nav class="tabs" id="tabs" role="tablist" aria-label="시험 종류"></nav>
+  <p class="src" id="src"></p>
 
   <div class="toolbar" id="toolbar"></div>
   <ul class="runs" id="runs"></ul>
@@ -140,39 +156,75 @@
 <script>
 // @core-start — DOM 접근 없는 순수 로직 (tests/rating.test.js 가 이 구간만 읽어 테스트)
 
-// ===== 1. 프로토콜 설정 (IIHS Small Overlap Protocol VII, 단위 mm) =====
+// ===== 1. 시험별 프로토콜 설정 (단위 mm, 기준값은 IIHS 원문 cm × 10) =====
 // t: [Good 상한, Acceptable 상한, Marginal 상한], 초과 시 Poor. 경계값은 더 좋은 등급 (v <= 상한)
-const PROTOCOL = {
-  version: "VII",
-  yMax: 450,   // 차트 최소 y 범위 (값이 더 크면 자동 확장)
-  yStep: 50,
-  locations: [
-    { key: "lower_hinge_pillar", label: "Lower hinge pillar", name: "Lower hinge pillar",     group: "lower", t: [150, 225, 300] },
-    { key: "footrest",           label: "Footrest",           name: "Footrest",               group: "lower", t: [150, 225, 300] },
-    { key: "left_toepan",        label: "Left toepan",        name: "Left toepan",            group: "lower", t: [150, 225, 300] },
-    { key: "brake_pedal",        label: "Brake pedal",        name: "Brake pedal",            group: "lower", t: [150, 225, 300] },
-    { key: "parking_brake",      label: "Parking brake",      name: "Parking brake pedal",    group: "lower", t: [150, 225, 300] },
-    { key: "rocker_lat",         label: "Rocker (lat)",       name: "Rocker panel (lat)",     group: "lower", t: [50, 100, 150] },
-    { key: "steering_long",      label: "Steering col.",      name: "Steering column (long)", group: "upper", t: [50, 100, 150] },
-    { key: "upper_hinge_pillar", label: "Upper hinge pillar", name: "Upper hinge pillar",     group: "upper", t: [75, 125, 175] },
-    { key: "upper_dash",         label: "Upper dash",         name: "Upper dash",             group: "upper", t: [75, 125, 175] },
-    { key: "left_ip",            label: "Left IP",            name: "Left instrument panel",  group: "upper", t: [75, 125, 175] },
-  ],
-};
+// csv: CSV 의 location 표기, calc: 값 계산 방법 (아래 CALC). 측정점이 여러 개면 평균한다
+const LOWER_UPPER = [{ key: "lower", label: "Lower" }, { key: "upper", label: "Upper" }];
 
-// ===== 2. CSV 매핑 (CSV location 표기 → location_key, 사용할 컬럼) =====
-// 측정점이 여러 개면 평균한다 (hinge pillar: resultant 3점 평균, rocker: Y 성분 3점 평균)
-const CSV_MAP = {
-  Lower_Hinge_Pillar:    { key: "lower_hinge_pillar", field: "resultant_mm" },
-  Footrest:              { key: "footrest",           field: "resultant_mm" },
-  Left_Toepan:           { key: "left_toepan",        field: "resultant_mm" },
-  Brake_Pedal:           { key: "brake_pedal",        field: "resultant_mm" },
-  Parking_Brake_Pedal:   { key: "parking_brake",      field: "resultant_mm" },
-  Rocker_Panel:          { key: "rocker_lat",         field: "dy_mm" },
-  Steering_Column:       { key: "steering_long",      field: "dx_mm" },
-  Upper_Hinge_Pillar:    { key: "upper_hinge_pillar", field: "resultant_mm" },
-  Upper_Dash:            { key: "upper_dash",         field: "resultant_mm" },
-  Left_Instrument_Panel: { key: "left_ip",            field: "resultant_mm" },
+const PROTOCOLS = {
+  so_driver: {
+    id: "so_driver", tab: "Small overlap · 운전석",
+    source: "IIHS Small Overlap Rating Protocol Version VII (April 2024)",
+    note: "Lower / Upper 서브레이팅, 종합은 나쁜 쪽",
+    groups: LOWER_UPPER, yMax: 450, yStep: 50,
+    locations: [
+      { key: "lower_hinge_pillar", label: "Lower hinge pillar", name: "Lower hinge pillar",     group: "lower", t: [150, 225, 300], csv: "Lower_Hinge_Pillar",    calc: "resultant" },
+      { key: "footrest",           label: "Footrest",           name: "Footrest",               group: "lower", t: [150, 225, 300], csv: "Footrest",              calc: "resultant" },
+      { key: "left_toepan",        label: "Left toepan",        name: "Left toepan",            group: "lower", t: [150, 225, 300], csv: "Left_Toepan",           calc: "resultant" },
+      { key: "brake_pedal",        label: "Brake pedal",        name: "Brake pedal",            group: "lower", t: [150, 225, 300], csv: "Brake_Pedal",           calc: "resultant" },
+      { key: "parking_brake",      label: "Parking brake",      name: "Parking brake pedal",    group: "lower", t: [150, 225, 300], csv: "Parking_Brake_Pedal",   calc: "resultant" },
+      { key: "rocker_lat",         label: "Rocker (lat)",       name: "Rocker panel (lat)",     group: "lower", t: [50, 100, 150],  csv: "Rocker_Panel",          calc: "dy" },
+      { key: "steering_long",      label: "Steering col.",      name: "Steering column (long)", group: "upper", t: [50, 100, 150],  csv: "Steering_Column",       calc: "dx" },
+      { key: "upper_hinge_pillar", label: "Upper hinge pillar", name: "Upper hinge pillar",     group: "upper", t: [75, 125, 175],  csv: "Upper_Hinge_Pillar",    calc: "resultant" },
+      { key: "upper_dash",         label: "Upper dash",         name: "Upper dash",             group: "upper", t: [75, 125, 175],  csv: "Upper_Dash",            calc: "resultant" },
+      { key: "left_ip",            label: "Left IP",            name: "Left instrument panel",  group: "upper", t: [75, 125, 175],  csv: "Left_Instrument_Panel", calc: "resultant" },
+    ],
+  },
+  so_passenger: {
+    id: "so_passenger", tab: "Small overlap · 조수석",
+    source: "IIHS Small Overlap Rating Protocol Version VII (April 2024), Appendix Figure A-4",
+    note: "운전석과 같은 규칙: Lower / Upper 서브레이팅, 종합은 나쁜 쪽",
+    groups: LOWER_UPPER, yMax: 450, yStep: 50,
+    locations: [
+      { key: "lower_hinge_pillar", label: "Lower hinge pillar", name: "Lower hinge pillar", group: "lower", t: [150, 225, 300], csv: "Lower_Hinge_Pillar", calc: "resultant" },
+      { key: "footrest",           label: "Footrest",           name: "Footrest",           group: "lower", t: [150, 225, 300], csv: "Footrest",           calc: "resultant" },
+      { key: "right_toepan",       label: "Right toepan",       name: "Right toepan",       group: "lower", t: [150, 225, 300], csv: "Right_Toepan",       calc: "resultant" },
+      { key: "center_toepan",      label: "Center toepan",      name: "Center toepan",      group: "lower", t: [150, 225, 300], csv: "Center_Toepan",      calc: "resultant" },
+      { key: "rocker_lat",         label: "Rocker (lat)",       name: "Rocker panel (lat)", group: "lower", t: [50, 100, 150],  csv: "Rocker_Panel",       calc: "dy" },
+      { key: "center_dash",        label: "Center dash",        name: "Center dash",        group: "upper", t: [75, 125, 175],  csv: "Center_Dash",        calc: "resultant" },
+      { key: "upper_hinge_pillar", label: "Upper hinge pillar", name: "Upper hinge pillar", group: "upper", t: [75, 125, 175],  csv: "Upper_Hinge_Pillar", calc: "resultant" },
+      { key: "upper_dash",         label: "Upper dash",         name: "Upper dash",         group: "upper", t: [75, 125, 175],  csv: "Upper_Dash",         calc: "resultant" },
+      { key: "right_lower_dash",   label: "Right lower dash",   name: "Right lower dash",   group: "upper", t: [75, 125, 175],  csv: "Right_Lower_Dash",   calc: "resultant" },
+    ],
+  },
+  mo2: {
+    id: "mo2", tab: "Moderate overlap 2.0",
+    source: "IIHS Moderate Overlap 2.0 Rating Guidelines Version III (February 2026), Figure 7",
+    note: "Lower / Upper 구분 없이 구조 단일 판정. Toepan·Footrest·Brake pedal 은 X-Y-Z 합성 (X 가 전방이면 Y-Z 합성), Instrument panel 은 후방 X 만",
+    groups: [{ key: "structure", label: "Structure" }], yMax: 400, yStep: 50,
+    locations: [
+      { key: "footrest",      label: "Footrest",      name: "Footrest",               group: "structure", t: [150, 225, 300], csv: "Footrest",               calc: "xyz_or_yz" },
+      { key: "left_toepan",   label: "Left toepan",   name: "Left toepan",            group: "structure", t: [150, 225, 300], csv: "Left_Toepan",            calc: "xyz_or_yz" },
+      { key: "center_toepan", label: "Center toepan", name: "Center toepan",          group: "structure", t: [150, 225, 300], csv: "Center_Toepan",          calc: "xyz_or_yz" },
+      { key: "right_toepan",  label: "Right toepan",  name: "Right toepan",           group: "structure", t: [150, 225, 300], csv: "Right_Toepan",           calc: "xyz_or_yz" },
+      { key: "brake_pedal",   label: "Brake pedal",   name: "Brake pedal",            group: "structure", t: [150, 225, 300], csv: "Brake_Pedal",            calc: "xyz_or_yz" },
+      { key: "left_ip",       label: "Left IP",       name: "Left instrument panel",  group: "structure", t: [50, 100, 150],  csv: "Left_Instrument_Panel",  calc: "dx" },
+      { key: "right_ip",      label: "Right IP",      name: "Right instrument panel", group: "structure", t: [50, 100, 150],  csv: "Right_Instrument_Panel", calc: "dx" },
+      { key: "door_opening",  label: "Door opening",  name: "Door opening",           group: "structure", t: [50, 100, 150],  csv: "Door_Opening",           calc: "resultant" },
+    ],
+  },
+};
+const PROTOCOL = PROTOCOLS.so_driver;   // 기본 시험 (운전석)
+
+// CSV 한 행(숫자로 바꾼 컬럼) → 판정에 쓰는 값. dx_mm 은 + 가 후방(탑승자 쪽)
+const CALC = {
+  resultant: r => r.resultant_mm,                                                  // X-Y-Z 합성
+  dx: r => r.dx_mm,                                                                // 전후 (X) 성분
+  dy: r => r.dy_mm,                                                                // 좌우 (Y) 성분
+  xyz_or_yz: r => (r.dx_mm < 0 ? Math.hypot(r.dy_mm, r.dz_mm) : r.resultant_mm),   // X 가 전방이면 Y-Z 합성
+};
+const CALC_COLUMNS = {
+  resultant: ["resultant_mm"], dx: ["dx_mm"], dy: ["dy_mm"], xyz_or_yz: ["dx_mm", "dy_mm", "dz_mm", "resultant_mm"],
 };
 
 const RESULT_FILE = "results.csv";
@@ -207,29 +259,58 @@ function pickCsvTargets(paths) {
   return { targets, skipped };
 }
 
-function parseCsv(text, fileName, runName) {
+function splitCsv(text) {
   const lines = text.replace(/^﻿/, "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  if (lines.length < 2) throw new Error(`${fileName}: 데이터 행이 없습니다.`);
-  const header = lines[0].split(",").map(h => h.trim());
+  return { header: (lines[0] || "").split(",").map(h => h.trim()), rows: lines.slice(1).map(l => l.split(",").map(c => c.trim())) };
+}
+
+// CSV 표기 → location 설정
+const csvIndex = protocol => Object.fromEntries(protocol.locations.map(l => [l.csv, l]));
+
+// CSV 에 나오는 측정위치 이름 (중복 제거)
+function csvLocationNames(text) {
+  const { header, rows } = splitCsv(text);
+  const ci = header.indexOf("location");
+  return ci < 0 ? [] : [...new Set(rows.map(r => r[ci]))];
+}
+
+// 측정위치 이름이 가장 잘 맞는 시험: 점수 = 아는 이름 수 − 모르는 이름 수. 동점이면 fallback(현재 탭)
+function detectProtocol(names, fallbackId) {
+  const score = id => { const idx = csvIndex(PROTOCOLS[id]); return names.reduce((s, n) => s + (idx[n] ? 1 : -1), 0); };
+  let best = fallbackId, bestScore = score(fallbackId);
+  Object.keys(PROTOCOLS).forEach(id => {
+    const s = score(id);
+    if (s > bestScore) { best = id; bestScore = s; }
+  });
+  return best;
+}
+
+function parseCsv(text, fileName, runName, protocol = PROTOCOL) {
+  const { header, rows } = splitCsv(text);
+  if (!rows.length) throw new Error(`${fileName}: 데이터 행이 없습니다.`);
   const col = name => header.indexOf(name);
   ["run_id", "location"].forEach(c => {
     if (col(c) < 0) throw new Error(`${fileName}: '${c}' 컬럼이 없습니다.`);
   });
 
-  const rows = lines.slice(1).map(l => l.split(",").map(c => c.trim()));
   const ids = [...new Set(rows.map(r => r[col("run_id")]))];
   if (ids.length !== 1 || !ids[0]) throw new Error(`${fileName}: run_id 가 하나여야 합니다 (발견: ${ids.join(", ") || "없음"}).`);
 
+  const idx = csvIndex(protocol);
   const points = {}, unknown = new Set();
   rows.forEach(r => {
-    const loc = r[col("location")];
-    const m = CSV_MAP[loc];
-    if (!m) { unknown.add(loc); return; }
-    const ci = col(m.field);
-    if (ci < 0) throw new Error(`${fileName}: '${m.field}' 컬럼이 없습니다.`);
-    const v = Number(r[ci]);
-    if (r[ci] === "" || !Number.isFinite(v)) throw new Error(`${fileName}: ${loc} 의 ${m.field} 값이 숫자가 아닙니다.`);
-    (points[m.key] = points[m.key] || []).push(v);
+    const locName = r[col("location")];
+    const loc = idx[locName];
+    if (!loc) { unknown.add(locName); return; }
+    const rec = {};
+    CALC_COLUMNS[loc.calc].forEach(c => {
+      const ci = col(c);
+      if (ci < 0) throw new Error(`${fileName}: '${c}' 컬럼이 없습니다.`);
+      const v = Number(r[ci]);
+      if (r[ci] === undefined || r[ci] === "" || !Number.isFinite(v)) throw new Error(`${fileName}: ${locName} 의 ${c} 값이 숫자가 아닙니다.`);
+      rec[c] = v;
+    });
+    (points[loc.key] = points[loc.key] || []).push(CALC[loc.calc](rec));
   });
 
   const values = {};
@@ -239,13 +320,13 @@ function parseCsv(text, fileName, runName) {
 
   const warnings = [];
   if (unknown.size) warnings.push(`알 수 없는 측정위치 무시: ${[...unknown].join(", ")}`);
-  const missing = PROTOCOL.locations.filter(l => !(l.key in values)).map(l => l.name);
+  const missing = protocol.locations.filter(l => !(l.key in values)).map(l => l.name);
   if (missing.length) warnings.push(`누락된 측정위치: ${missing.join(", ")}`);
 
-  return { runId: ids[0], name: runName || nameFromFile(fileName), fileName, values, warnings };
+  return { runId: ids[0], name: runName || nameFromFile(fileName), fileName, test: protocol.id, values, warnings };
 }
 
-// ===== 3. 판정 로직 =====
+// ===== 2. 판정 로직 (세 시험 공통) =====
 const RATINGS = ["Good", "Acceptable", "Marginal", "Poor"];
 
 function bandOf(value, t) {
@@ -267,19 +348,22 @@ function subRating(bands) {
   return Math.max(mode, worst - 1);
 }
 
-// run.values: { location_key: value_mm } → { lower, upper, overall } (0..3, 값이 없으면 null)
-function rateRun(run) {
-  const bands = { lower: [], upper: [] };
-  PROTOCOL.locations.forEach(loc => {
+// run.values: { location_key: value_mm } → 그룹별 판정 + overall (0..3, 값이 없으면 null)
+//   Small overlap: { lower, upper, overall }   Moderate overlap 2.0: { structure, overall }
+function rateRun(run, protocol = PROTOCOL) {
+  const bands = Object.fromEntries(protocol.groups.map(g => [g.key, []]));
+  protocol.locations.forEach(loc => {
     const v = run.values[loc.key];
     if (Number.isFinite(v)) bands[loc.group].push(bandOf(v, loc.t));
   });
-  const lower = subRating(bands.lower), upper = subRating(bands.upper);
-  const overall = lower === null || upper === null ? null : Math.max(lower, upper);
-  return { lower, upper, overall };
+  const result = {};
+  protocol.groups.forEach(g => { result[g.key] = subRating(bands[g.key]); });
+  const subs = protocol.groups.map(g => result[g.key]);
+  result.overall = subs.includes(null) ? null : Math.max(...subs);
+  return result;
 }
 
-// ===== 4. 그래프 선택 (최대 3개) =====
+// ===== 3. 그래프 선택 (최대 3개) =====
 // slots: 길이 CHART_MAX 배열 (runId 또는 null). 색·무늬는 slot 위치로 고정 → 다른 run을 빼도 색이 안 바뀜
 const CHART_MAX = 3;
 
@@ -297,9 +381,12 @@ function removeFromChart(slots, runId) {
 }
 // @core-end
 
-// ===== 5. 상태 =====
+// ===== 4. 상태 (시험 탭마다 따로) =====
 // runs: runId 순 정렬, shown: 표 ON/OFF { runId: bool }, slots: 그래프 칸 (최대 3)
-const state = { runs: [], shown: {}, slots: Array(CHART_MAX).fill(null) };
+const newTab = () => ({ runs: [], shown: {}, slots: Array(CHART_MAX).fill(null) });
+const state = { active: PROTOCOL.id, tabs: Object.fromEntries(Object.keys(PROTOCOLS).map(id => [id, newTab()])) };
+const cur = () => state.tabs[state.active];
+const proto = () => PROTOCOLS[state.active];
 
 function compareId(a, b) {
   const na = Number(a), nb = Number(b);
@@ -307,38 +394,38 @@ function compareId(a, b) {
 }
 
 // 같은 run_id 가 이미 있으면 새 파일로 교체 (표·그래프 선택 상태는 유지). 교체됐으면 true
-function addRun(run) {
-  const i = state.runs.findIndex(r => r.runId === run.runId);
-  if (i >= 0) state.runs[i] = run;
+function addRun(tab, run) {
+  const i = tab.runs.findIndex(r => r.runId === run.runId);
+  if (i >= 0) tab.runs[i] = run;
   else {
-    state.runs.push(run);
-    state.runs.sort((a, b) => compareId(a.runId, b.runId));
-    state.shown[run.runId] = true;
+    tab.runs.push(run);
+    tab.runs.sort((a, b) => compareId(a.runId, b.runId));
+    tab.shown[run.runId] = true;
   }
   return i >= 0;
 }
 
 // 새로 불러온 run은 그래프 빈 칸이 있으면 run_id 순으로 채운다
-function autoFillChart(newIds) {
+function autoFillChart(tab, newIds) {
   newIds.slice().sort(compareId).forEach(id => {
-    if (state.slots.includes(id)) return;
-    const r = toggleChart(state.slots, id);
-    if (r.ok) state.slots = r.slots;
+    if (tab.slots.includes(id)) return;
+    const r = toggleChart(tab.slots, id);
+    if (r.ok) tab.slots = r.slots;
   });
 }
 
-function setShown(runId, on) {
-  state.shown[runId] = on;
-  if (!on) state.slots = removeFromChart(state.slots, runId);
+function setShown(tab, runId, on) {
+  tab.shown[runId] = on;
+  if (!on) tab.slots = removeFromChart(tab.slots, runId);
 }
 
-function removeRun(runId) {
-  state.runs = state.runs.filter(r => r.runId !== runId);
-  delete state.shown[runId];
-  state.slots = removeFromChart(state.slots, runId);
+function removeRun(tab, runId) {
+  tab.runs = tab.runs.filter(r => r.runId !== runId);
+  delete tab.shown[runId];
+  tab.slots = removeFromChart(tab.slots, runId);
 }
 
-// ===== 6. 데이터 로드 (Apps Script 전환 시 google.script.run 으로 교체할 자리) =====
+// ===== 5. 데이터 로드 (Apps Script 전환 시 google.script.run 으로 교체할 자리) =====
 function readFileText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -371,6 +458,7 @@ async function entriesFromDrop(dataTransfer) {
   return out;
 }
 
+// CSV 마다 시험 종류를 판별해 해당 탭에 넣는다
 async function loadEntries(items) {
   const byPath = new Map(items.map(it => [it.path, it.file]));
   const { targets } = pickCsvTargets([...byPath.keys()]);
@@ -378,23 +466,32 @@ async function loadEntries(items) {
     notify(`불러올 CSV가 없습니다. 폴더 안에서는 ${RESULT_FILE} 만 읽습니다.`, "error");
     return;
   }
-  const added = [], replaced = [];
+  const added = {}, replaced = {};   // { testId: [runId] }
   for (const t of targets) {
     try {
-      const run = parseCsv(await readFileText(byPath.get(t.path)), t.path, t.name);
-      (addRun(run) ? replaced : added).push(run.runId);
+      const text = await readFileText(byPath.get(t.path));
+      const testId = detectProtocol(csvLocationNames(text), state.active);
+      const run = parseCsv(text, t.path, t.name, PROTOCOLS[testId]);
+      const bucket = addRun(state.tabs[testId], run) ? replaced : added;
+      (bucket[testId] = bucket[testId] || []).push(run.runId);
       run.warnings.forEach(w => notify(`${t.path}: ${w}`, "error"));
     } catch (e) {
       notify(e.message, "error");
     }
   }
-  autoFillChart(added);
-  if (added.length) notify(`run ${added.length}개를 불러왔습니다.`);
-  if (replaced.length) notify(`같은 run_id 를 새 파일로 교체했습니다: run ${replaced.sort(compareId).join(", ")}`);
+  const ids = Object.keys(PROTOCOLS);
+  ids.forEach(id => added[id] && autoFillChart(state.tabs[id], added[id]));
+  const addedMsg = ids.filter(id => added[id]).map(id => `${PROTOCOLS[id].tab} ${added[id].length}개`);
+  if (addedMsg.length) notify(`run 을 불러왔습니다: ${addedMsg.join(", ")}`);
+  ids.filter(id => replaced[id]).forEach(id =>
+    notify(`같은 run_id 를 새 파일로 교체했습니다 (${PROTOCOLS[id].tab}): run ${replaced[id].sort(compareId).join(", ")}`));
+  // 지금 탭에는 들어간 게 없고 다른 탭에만 들어갔으면 그 탭으로 이동
+  const touched = ids.filter(id => added[id] || replaced[id]);
+  if (touched.length && !touched.includes(state.active)) state.active = touched[0];
   render();
 }
 
-// ===== 7. 렌더링 =====
+// ===== 6. 렌더링 =====
 const BAND_COLORS = ["#0ca30c", "#fab219", "#ec835a", "#d03b3b"];
 const RATING_TEXT = ["var(--good-t)", "var(--warn-t)", "var(--warn-t)", "var(--bad-t)"];
 const darkQuery = matchMedia("(prefers-color-scheme: dark)");
@@ -406,9 +503,10 @@ const MUTED = "#898781";
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = v => (Number.isFinite(v) ? v.toFixed(1) : "–");
 const ratingName = r => (r === null ? "–" : RATINGS[r]);
+const ratingColor = r => (r === null ? "var(--muted)" : RATING_TEXT[r]);
 
 // 그래프 칸별 색·무늬: 1번째 단색, 2번째 사선, 3번째 점
-const slotOf = runId => state.slots.indexOf(runId);
+const slotOf = runId => cur().slots.indexOf(runId);
 const colorOf = slot => theme().series[slot];
 
 function fillFor(slot) {
@@ -427,15 +525,16 @@ function swatch(slot) {
 
 const W = 720, H = 400, ML = 40, MR = 8, MT = 10, MB = 100;
 const PW = W - ML - MR, PH = H - MT - MB;
-const N = PROTOCOL.locations.length, CW = PW / N;
-const xc = i => ML + CW * (i + 0.5);
 
 // runs: 그래프에 그릴 run (slot 순서)
 function renderChart(runs) {
+  const p = proto(), locs = p.locations;
   const { dark, ink } = theme();
+  const N = locs.length, CW = PW / N;
+  const xc = i => ML + CW * (i + 0.5);
   const maxV = Math.max(0, ...runs.flatMap(r => Object.values(r.values)));
-  const yMax = Math.max(PROTOCOL.yMax, Math.ceil(maxV / PROTOCOL.yStep) * PROTOCOL.yStep);
-  const y = v => MT + PH - (Math.min(v, yMax) / yMax) * PH;
+  const yMax = Math.max(p.yMax, Math.ceil(maxV / p.yStep) * p.yStep);
+  const y = v => MT + PH - (Math.min(Math.max(v, 0), yMax) / yMax) * PH;
 
   const defs = [1, 2].map(s => {
     const c = colorOf(s);
@@ -450,7 +549,7 @@ function renderChart(runs) {
   let bands = "";
   const idx = [...Array(N).keys()];
   for (let k = 3; k >= 0; k--) {
-    const top = idx.map(i => (k < 3 ? PROTOCOL.locations[i].t[k] : yMax));
+    const top = idx.map(i => (k < 3 ? locs[i].t[k] : yMax));
     const pts = [`${ML},${y(top[0])}`]
       .concat(idx.map(i => `${xc(i)},${y(top[i])}`))
       .concat([`${W - MR},${y(top[N - 1])}`, `${W - MR},${y(0)}`, `${ML},${y(0)}`]);
@@ -459,26 +558,26 @@ function renderChart(runs) {
 
   // 축
   let axes = "";
-  for (let v = 0; v <= yMax; v += PROTOCOL.yStep) {
+  for (let v = 0; v <= yMax; v += p.yStep) {
     axes += `<text x="${ML - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="${MUTED}">${v}</text>`;
   }
   axes += `<text x="12" y="${MT + PH / 2}" font-size="12" fill="${MUTED}" text-anchor="middle"
              transform="rotate(-90 12 ${MT + PH / 2})">Measured intrusion (mm)</text>`;
-  PROTOCOL.locations.forEach((loc, i) => {
+  locs.forEach((loc, i) => {
     axes += `<text x="${xc(i) + 4}" y="${y(0) + 12}" font-size="11" fill="${MUTED}" text-anchor="end"
                transform="rotate(-45 ${xc(i) + 4} ${y(0) + 12})">${loc.label}</text>`;
+    // 그룹 경계선 (lower / upper)
+    if (i > 0 && locs[i - 1].group !== loc.group) {
+      const x = ML + CW * i;
+      axes += `<line x1="${x}" y1="${MT}" x2="${x}" y2="${y(0)}" stroke="${ink}" stroke-dasharray="3 3"/>`;
+    }
   });
-  const split = PROTOCOL.locations.findIndex(l => l.group === "upper");
-  if (split > 0) {
-    const x = ML + CW * split;
-    axes += `<line x1="${x}" y1="${MT}" x2="${x}" y2="${y(0)}" stroke="${ink}" stroke-dasharray="3 3"/>`;
-  }
 
   // 막대 (다중 run = 그룹 막대, 1개 run = 막대 위 값 표시)
   let bars = "";
   const n = runs.length;
   const bw = n > 1 ? Math.min(14, (CW - 8) / n) : 20;
-  PROTOCOL.locations.forEach((loc, i) => {
+  locs.forEach((loc, i) => {
     runs.forEach((run, j) => {
       const v = run.values[loc.key];
       if (!Number.isFinite(v)) return;
@@ -494,20 +593,24 @@ function renderChart(runs) {
                           아래 표에서 "그래프"를 체크하면 여기에 그려집니다 (최대 ${CHART_MAX}개)</text>`;
 
   document.getElementById("chart").innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="측정 위치별 intrusion과 IIHS 판정 구간">
+    <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(p.tab)} 측정 위치별 intrusion과 IIHS 판정 구간">
       <defs>${defs}</defs>${bands}${axes}${bars}${hint}
     </svg>`;
 }
 
 // runs: 그래프에 그린 run (최대 3개)
 function renderCards(runs) {
+  const p = proto();
   document.getElementById("cards").innerHTML = runs.map(run => {
-    const r = rateRun(run);
-    const missing = PROTOCOL.locations.filter(l => !Number.isFinite(run.values[l.key])).length;
+    const r = rateRun(run, p);
+    const missing = p.locations.filter(l => !Number.isFinite(run.values[l.key])).length;
+    const sub = p.groups.length > 1
+      ? p.groups.map(g => `${g.label} ${ratingName(r[g.key])}`).join(" · ")
+      : "구조 단일 판정";
     return `<div class="card">
       <div class="k">${swatch(slotOf(run.runId))} run ${esc(run.runId)} · ${esc(run.name)}</div>
-      <div class="v" style="color:${r.overall === null ? "var(--muted)" : RATING_TEXT[r.overall]}">${ratingName(r.overall)}</div>
-      <div class="k">Lower ${ratingName(r.lower)} · Upper ${ratingName(r.upper)}</div>
+      <div class="v" style="color:${ratingColor(r.overall)}">${ratingName(r.overall)}</div>
+      <div class="k">${sub}</div>
       ${missing ? `<div class="w">측정위치 ${missing}개 누락</div>` : ""}
     </div>`;
   }).join("");
@@ -515,21 +618,24 @@ function renderCards(runs) {
 
 // runs: 표 ON 인 run 전부 (개수 제한 없음)
 function renderTable(runs) {
+  const p = proto(), t = cur();
   const el = document.getElementById("table");
   if (!runs.length) {
-    el.innerHTML = `<p class="empty" style="padding:0 12px">${state.runs.length ? "표에 켜진 run이 없습니다. 위 목록에서 켜 주세요." : "불러온 run이 없습니다."}</p>`;
+    el.innerHTML = `<p class="empty" style="padding:0 12px">${t.runs.length ? "표에 켜진 run이 없습니다. 위 목록에서 켜 주세요." : "이 시험에 불러온 run이 없습니다."}</p>`;
     return;
   }
+  const multi = p.groups.length > 1;
+  const groupLabel = Object.fromEntries(p.groups.map(g => [g.key, g.label]));
   const cls = run => (slotOf(run.runId) >= 0 ? "charted" : "");
-  const head = `<tr><th>측정위치</th><th>그룹</th><th>기준 G / A / M</th>${runs.map(run => `
+  const head = `<tr><th>측정위치</th>${multi ? "<th>그룹</th>" : ""}<th>기준 G / A / M</th>${runs.map(run => `
     <th class="run ${cls(run)}">
       <label><input type="checkbox" data-chart="${esc(run.runId)}" ${slotOf(run.runId) >= 0 ? "checked" : ""}>그래프</label>
       <div class="rid">${swatch(slotOf(run.runId))} run ${esc(run.runId)}</div>
       <div class="rnm">${esc(run.name)}</div>
     </th>`).join("")}</tr>`;
 
-  const body = PROTOCOL.locations.map((loc, i) => {
-    const prev = PROTOCOL.locations[i - 1];
+  const body = p.locations.map((loc, i) => {
+    const prev = p.locations[i - 1];
     const cells = runs.map(run => {
       const v = run.values[loc.key];
       if (!Number.isFinite(v)) return `<td class="${cls(run)}" style="color:var(--muted)">–</td>`;
@@ -537,44 +643,57 @@ function renderTable(runs) {
       return `<td class="r${b}" title="${RATINGS[b]}">${fmt(v)}</td>`;
     }).join("");
     return `<tr class="${prev && prev.group !== loc.group ? "split" : ""}">
-      <td>${loc.name}</td><td class="grp">${loc.group}</td><td class="th">${loc.t.join(" / ")}</td>${cells}</tr>`;
+      <td>${loc.name}</td>${multi ? `<td class="grp">${groupLabel[loc.group]}</td>` : ""}<td class="th">${loc.t.join(" / ")}</td>${cells}</tr>`;
   }).join("");
 
-  // 판정 결과 줄: Lower / Upper / 종합
-  const ratings = runs.map(rateRun);
-  const ratingRow = (label, key, first) => `<tr class="rating${first ? " first" : ""}"><td>${label}</td><td></td><td></td>${
-    ratings.map((r, j) => `<td class="${cls(runs[j])}" style="color:${r[key] === null ? "var(--muted)" : RATING_TEXT[r[key]]}">${ratingName(r[key])}</td>`).join("")}</tr>`;
-  const foot = ratingRow("Lower 판정", "lower", true) + ratingRow("Upper 판정", "upper") + ratingRow("종합 판정", "overall");
+  // 판정 결과 줄: 그룹이 여럿이면 그룹별 + 종합, 하나면 구조 판정 한 줄
+  const ratings = runs.map(run => rateRun(run, p));
+  const lines = multi
+    ? p.groups.map(g => ({ key: g.key, label: `${g.label} 판정` })).concat({ key: "overall", label: "종합 판정" })
+    : [{ key: "overall", label: "Structure 판정" }];
+  const foot = lines.map((ln, li) => `<tr class="rating${li ? "" : " first"}"><td>${ln.label}</td>${multi ? "<td></td>" : ""}<td></td>${
+    ratings.map((r, j) => `<td class="${cls(runs[j])}" style="color:${ratingColor(r[ln.key])}">${ratingName(r[ln.key])}</td>`).join("")}</tr>`).join("");
 
   el.innerHTML = `<table><thead>${head}</thead><tbody>${body}${foot}</tbody></table>`;
 }
 
+function renderTabs() {
+  document.getElementById("tabs").innerHTML = Object.values(PROTOCOLS).map(p => `
+    <button type="button" class="tab" role="tab" data-tab="${p.id}" aria-selected="${p.id === state.active}">
+      ${p.tab}<span class="cnt">${state.tabs[p.id].runs.length}</span></button>`).join("");
+  const p = proto();
+  document.getElementById("src").textContent = `판정 기준: ${p.source} · ${p.note}`;
+}
+
 function renderRunList() {
-  const shownCount = state.runs.filter(r => state.shown[r.runId]).length;
-  const charted = state.slots.filter(id => id !== null).length;
-  document.getElementById("toolbar").innerHTML = state.runs.length ? `
-    <span>불러온 run ${state.runs.length}개 · 표 ${shownCount}개 · 그래프 ${charted}/${CHART_MAX}</span>
+  const t = cur();
+  const shownCount = t.runs.filter(r => t.shown[r.runId]).length;
+  const charted = t.slots.filter(id => id !== null).length;
+  document.getElementById("toolbar").innerHTML = t.runs.length ? `
+    <span>불러온 run ${t.runs.length}개 · 표 ${shownCount}개 · 그래프 ${charted}/${CHART_MAX}</span>
     <span class="sp"></span>
     <button type="button" class="btn" data-act="all-on">표 전체 켜기</button>
     <button type="button" class="btn" data-act="all-off">표 전체 끄기</button>
     <button type="button" class="btn" data-act="clear">전체 삭제</button>` : "";
 
   const el = document.getElementById("runs");
-  if (!state.runs.length) {
-    el.innerHTML = `<li class="empty" style="border:none">불러온 run이 없습니다. samples/runs 폴더로 시작해 보세요.</li>`;
+  if (!t.runs.length) {
+    el.innerHTML = `<li class="empty" style="border:none">이 시험에 불러온 run이 없습니다. samples 폴더를 고르면 세 시험의 데모 run이 탭별로 들어갑니다.</li>`;
     return;
   }
-  el.innerHTML = state.runs.map(r => `
-    <li class="${state.shown[r.runId] ? "" : "off"}" title="${esc(r.fileName)}">
-      <label><input type="checkbox" data-show="${esc(r.runId)}" ${state.shown[r.runId] ? "checked" : ""}>
+  el.innerHTML = t.runs.map(r => `
+    <li class="${t.shown[r.runId] ? "" : "off"}" title="${esc(r.fileName)}">
+      <label><input type="checkbox" data-show="${esc(r.runId)}" ${t.shown[r.runId] ? "checked" : ""}>
         ${swatch(slotOf(r.runId))}<span class="nm">run ${esc(r.runId)} · ${esc(r.name)}</span></label>
       <button type="button" class="x" data-remove="${esc(r.runId)}" aria-label="run ${esc(r.runId)} 삭제">삭제</button>
     </li>`).join("");
 }
 
 function render() {
-  const shown = state.runs.filter(r => state.shown[r.runId]);
-  const charted = state.slots.filter(id => id !== null).map(id => state.runs.find(r => r.runId === id)).filter(Boolean);
+  const t = cur();
+  const shown = t.runs.filter(r => t.shown[r.runId]);
+  const charted = t.slots.filter(id => id !== null).map(id => t.runs.find(r => r.runId === id)).filter(Boolean);
+  renderTabs();
   renderRunList();
   renderCards(charted);
   renderChart(charted);
@@ -589,7 +708,7 @@ function notify(message, kind) {
   setTimeout(() => box.remove(), kind === "error" ? 7000 : 4000);
 }
 
-// ===== 8. UI 초기화 =====
+// ===== 7. UI 초기화 =====
 const folderInput = document.getElementById("folder");
 const fileInput = document.getElementById("file");
 document.getElementById("pickFolder").addEventListener("click", () => folderInput.click());
@@ -610,14 +729,21 @@ drop.addEventListener("drop", async e => loadEntries(await entriesFromDrop(e.dat
 // 드롭 영역 밖에 떨어뜨려도 브라우저가 파일을 열지 않도록
 ["dragover", "drop"].forEach(t => window.addEventListener(t, e => e.preventDefault()));
 
+document.getElementById("tabs").addEventListener("click", e => {
+  const btn = e.target.closest("[data-tab]");
+  if (!btn || btn.dataset.tab === state.active) return;
+  state.active = btn.dataset.tab;
+  render();
+});
+
 document.getElementById("toolbar").addEventListener("click", e => {
-  const act = e.target.dataset.act;
+  const act = e.target.dataset.act, t = cur();
   if (!act) return;
-  if (act === "all-on") state.runs.forEach(r => setShown(r.runId, true));
-  if (act === "all-off") state.runs.forEach(r => setShown(r.runId, false));
+  if (act === "all-on") t.runs.forEach(r => setShown(t, r.runId, true));
+  if (act === "all-off") t.runs.forEach(r => setShown(t, r.runId, false));
   if (act === "clear") {
-    if (!confirm(`불러온 run ${state.runs.length}개를 모두 목록에서 뺄까요? (파일은 지워지지 않습니다)`)) return;
-    state.runs.slice().forEach(r => removeRun(r.runId));
+    if (!confirm(`${proto().tab} 탭의 run ${t.runs.length}개를 모두 목록에서 뺄까요? (파일은 지워지지 않습니다)`)) return;
+    t.runs.slice().forEach(r => removeRun(t, r.runId));
   }
   render();
 });
@@ -625,21 +751,21 @@ document.getElementById("toolbar").addEventListener("click", e => {
 const runList = document.getElementById("runs");
 runList.addEventListener("change", e => {
   if (e.target.dataset.show === undefined) return;
-  setShown(e.target.dataset.show, e.target.checked);
+  setShown(cur(), e.target.dataset.show, e.target.checked);
   render();
 });
 runList.addEventListener("click", e => {
   if (e.target.dataset.remove === undefined) return;
-  removeRun(e.target.dataset.remove);
+  removeRun(cur(), e.target.dataset.remove);
   render();
 });
 
 document.getElementById("table").addEventListener("change", e => {
   const id = e.target.dataset.chart;
   if (id === undefined) return;
-  const r = toggleChart(state.slots, id);
+  const t = cur(), r = toggleChart(t.slots, id);
   if (!r.ok) notify(`그래프는 최대 ${CHART_MAX}개까지 그릴 수 있습니다. 다른 run의 체크를 먼저 해제하세요.`, "error");
-  state.slots = r.slots;
+  t.slots = r.slots;
   render();
 });
 

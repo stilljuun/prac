@@ -6,6 +6,14 @@
 ## v2.0 (계획)
 - 우측 패널에 Gemini 채팅: 현재 선택한 run 데이터·판정 결과를 같이 보며 분석
 
+## v1.2 — 2026-10-27 (검토 중, 확정 후 releases/v1.2 에 보관)
+- 시험 3종 탭: Small overlap 운전석 / Small overlap 조수석 / Moderate overlap 2.0 (구조 판정만)
+  - 조수석: Small Overlap Rating Protocol VII Appendix Figure A-4 기준, Lower / Upper 서브레이팅
+  - MO 2.0: Rating Guidelines Version III Figure 7 기준, 구조 단일 판정, Y-Z·후방 X 성분 규칙
+- CSV 측정위치 이름으로 시험을 자동 판별해 해당 탭에 넣음 (세 시험이 섞인 폴더도 한 번에)
+- 탭마다 run 목록·표·그래프 상태 따로, 탭 아래에 판정 기준 문서 표시
+- 데모 데이터 폴더 정리: `samples/small_overlap_driver/` (기존 `samples/runs/`), `samples/small_overlap_passenger/`, `samples/moderate_overlap_2/`
+
 ## v1.1 — 2026-10-19
 - 폴더 불러오기: `<run 폴더>/<서브폴더>/results.csv` 구조를 폴더째 선택·드롭하면 모두 불러옴, run 이름은 run 폴더명
 - 표: 불러온 run 전부를 열로 표시 (개수 제한 없음), run별 표 ON/OFF, 전체 켜기·끄기·삭제, 첫 열 고정
