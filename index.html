@@ -3,10 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Intrusion 뷰어</title>
+<title>충돌해석 도구</title>
 <!--
-  IIHS 구조(intrusion) 뷰어 — 로컬 MVP v1.2
-  - 시험 3종을 탭으로 구분: Small overlap 운전석 / Small overlap 조수석 / Moderate overlap 2.0
+  충돌해석 도구 — 로컬 MVP v1.3
+  - 상단 기능 탭: Intrusion 뷰어 / DOE 분석 (실험 설계 → 결과 입력·ANOVA → 최적화)
+  - Intrusion 뷰어: 시험 3종 탭 (Small overlap 운전석 / Small overlap 조수석 / Moderate overlap 2.0)
   - 단일 HTML 파일 (HTML + CSS + vanilla JS, 외부 라이브러리 없음, 서버 불필요)
   - 단위는 전부 mm
   - run 폴더 구조: <run 폴더>/<서브폴더>/results.csv  (예: R001_baseline/output/results.csv)
@@ -114,12 +115,180 @@
   .toast { background: var(--text); color: var(--bg); border-radius: 6px; padding: 8px 12px; font-size: 13px;
            box-shadow: 0 2px 8px rgba(0,0,0,.2); }
   .toast.error { background: var(--danger); color: #fff; }
+
+  /* ===== 앱 상단 (기능 탭) ===== */
+  .apphead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .apphead h1 { margin: 0; }
+  .appnav { display: inline-flex; gap: 2px; padding: 3px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  .appnav button { background: none; border: none; border-radius: 7px; padding: 7px 16px; font-size: 14px; color: var(--text-2); cursor: pointer; }
+  .appnav button[aria-selected="true"] { background: var(--bg); color: var(--text); font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+
+  /* ===== DOE ===== */
+  .doe input[type="text"], .doe input[type="number"], .doe select {
+    font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text); min-width: 0; }
+  .doe input[type="text"]:focus, .doe input[type="number"]:focus, .doe select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .doe input.bad { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--bg)); }
+  .doe-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .doe-lead { margin: 0; font-size: 14px; color: var(--text-2); }
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .doe p.muted { margin: 4px 0 8px; }
+  .doe .x { background: none; border: none; color: var(--muted); font-size: 12px; padding: 2px 6px; cursor: pointer; }
+  .doe .x:hover:not(:disabled) { color: var(--danger); }
+  .doe .x:disabled { opacity: .35; cursor: default; }
+
+  .stepper { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .stepper button { display: flex; align-items: center; gap: 10px; text-align: left; padding: 10px 12px; cursor: pointer;
+                    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; color: var(--text-2); }
+  .stepper .n { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+                background: var(--border); color: var(--text); font-size: 13px; font-weight: 600; }
+  .stepper b { display: block; color: var(--text); font-size: 14px; font-weight: 500; }
+  .stepper small { font-size: 12px; }
+  .stepper button[aria-current="step"] { background: var(--bg); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .stepper button[aria-current="step"] .n { background: var(--accent); color: #fff; }
+  .stepper button.done .n { background: var(--good-t); color: var(--bg); }
+  .stepper button:disabled { opacity: .5; cursor: not-allowed; }
+  @media (max-width: 640px) { .stepper small { display: none; } .stepper button { padding: 8px; gap: 6px; } .stepper b { font-size: 13px; } }
+
+  .intro { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;
+           padding: 12px 14px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 10%, var(--bg)); font-size: 14px; }
+  .panel { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; background: var(--bg); min-width: 0; }
+  .panel-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .panel-h + .panel-h, .panel > * + .panel-h { margin-top: 18px; }
+  .panel h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; font-weight: 600; }
+  .panel h3 .num { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+                   background: var(--surface); border: 1px solid var(--border); font-size: 12px; }
+  details.help { font-size: 13px; color: var(--text-2); max-width: 680px; }
+  details.help > summary { cursor: pointer; color: var(--accent); font-size: 12px; }
+  details.help[open] { background: var(--surface); border-radius: 8px; padding: 6px 12px; }
+  details.help p { margin: 6px 0; line-height: 1.55; }
+  details.adv { margin-top: 10px; font-size: 13px; }
+  details.adv > summary { cursor: pointer; color: var(--text-2); }
+  .adv-body { padding: 8px 0 0 14px; display: grid; gap: 6px; }
+  .notice { padding: 8px 12px; border-radius: 8px; font-size: 13px; line-height: 1.5;
+            background: color-mix(in srgb, var(--warn-t) 12%, var(--bg)); color: var(--text); margin-bottom: 8px; }
+  .actions-row { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+  .actions-row.end { justify-content: flex-end; }
+
+  .doe table td, .doe table th { text-align: center; }
+  .doe th:first-child, .doe td:first-child { text-align: center; }
+  .ftable input { width: 100%; }
+  .ftable td { padding: 4px 6px; }
+  .ftable .sym, .ftable .cnt { width: 1%; color: var(--text-2); font-weight: 500; }
+  .w-unit { width: 80px !important; }
+  .w-num { width: 90px; }
+
+  .mcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+  .mcard { position: relative; display: grid; gap: 3px; padding: 10px 12px; cursor: pointer;
+           border: 1px solid var(--border); border-radius: 10px; font-size: 13px; }
+  .mcard input { position: absolute; opacity: 0; pointer-events: none; }
+  .mcard b { font-size: 14px; font-weight: 500; }
+  .mcard .sub { color: var(--accent); font-weight: 500; }
+  .mcard .desc { color: var(--muted); font-size: 12px; line-height: 1.45; }
+  .mcard.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--bg)); }
+  .mcard.off { opacity: .45; cursor: not-allowed; }
+  .mcard:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 10px; background: var(--accent); color: #fff; font-weight: 500; vertical-align: 1px; }
+  .inter-list { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
+  .inter-list label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+  .buildbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+              padding: 10px 12px; border-radius: 8px; background: var(--surface); font-size: 13px; }
+
+  .facts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; }
+  .dtable td.lv1 { background-image: linear-gradient(rgba(57,135,229,.10), rgba(57,135,229,.10)); }
+  .dtable td.lv2 { background-image: linear-gradient(rgba(57,135,229,.22), rgba(57,135,229,.22)); }
+  .dtable td.lv3 { background-image: linear-gradient(rgba(57,135,229,.34), rgba(57,135,229,.34)); }
+  .dtable td.lv4 { background-image: linear-gradient(rgba(57,135,229,.46), rgba(57,135,229,.46)); }
+  .rtable td.in { padding: 2px 4px; }
+  .rtable td.in input { width: 92px; text-align: right; }
+  .rtable th.rh { background-image: linear-gradient(rgba(57,135,229,.08), rgba(57,135,229,.08)); color: var(--text); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .rchip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border: 1px solid var(--border);
+           border-radius: 16px; font-size: 13px; }
+  .rchip select { padding: 2px 4px !important; font-size: 12px !important; }
+  .inline-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .pills button { padding: 5px 12px; border-radius: 16px; border: 1px solid var(--border); background: var(--bg); color: var(--text-2); cursor: pointer; font-size: 13px; }
+  .pills button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .summary { padding: 10px 14px; border-radius: 8px; background: var(--surface); font-size: 14px; line-height: 1.65; margin-bottom: 12px; }
+  .summary p { margin: 0 0 2px; }
+  .two { display: grid; grid-template-columns: 1fr 220px; gap: 12px 20px; align-items: start; margin-bottom: 12px; }
+  @media (max-width: 720px) { .two { grid-template-columns: 1fr; } }
+  .bars { display: grid; gap: 6px; }
+  .bar-row { display: grid; grid-template-columns: minmax(80px, 220px) 1fr 52px; gap: 8px; align-items: center; font-size: 13px; }
+  .bar-row .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-row .val { text-align: right; font-variant-numeric: tabular-nums; }
+  .bar-track { height: 14px; border-radius: 4px; background: var(--surface); overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; background: var(--accent); }
+  .bar-fill.w { opacity: .6; } .bar-fill.n { background: var(--muted); opacity: .6; } .bar-fill.e { background: var(--border); }
+  .stats { display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13px; }
+  .stats dt { color: var(--text-2); } .stats dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .sig { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .sig.s { background: var(--cell-g); color: var(--good-t); }
+  .sig.w { background: var(--cell-a); color: var(--warn-t); }
+  .sig.n { background: var(--surface); color: var(--text-2); }
+  .sig.p { border: 1px dashed var(--border); color: var(--muted); }
+  .atable td { font-variant-numeric: tabular-nums; }
+  .atable td:first-child { text-align: left; }
+  .atable tr.pooled td { color: var(--muted); }
+  .atable tr.tot td { background: var(--surface); font-weight: 500; }
+  .me-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .me-card { border: 1px solid var(--border); border-radius: 8px; padding: 8px 8px 2px; }
+  .me-card .t { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .me-card .d { font-size: 11px; color: var(--muted); }
+
+  .opt-grid { display: grid; grid-template-columns: minmax(300px, 420px) minmax(0, 1fr); gap: 12px; align-items: start; }
+  @media (max-width: 880px) { .opt-grid { grid-template-columns: minmax(0, 1fr); } }
+  .form-grid { display: grid; gap: 8px; font-size: 13px; }
+  .form-grid label { display: grid; gap: 4px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; width: fit-content; }
+  .seg label { display: block; padding: 5px 14px; cursor: pointer; font-size: 13px; color: var(--text-2); }
+  .seg label + label { border-left: 1px solid var(--border); }
+  .seg label.on { background: var(--accent); color: #fff; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .cons-row { display: grid; grid-template-columns: minmax(0, 1fr) 56px 90px auto; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .ctable td { padding: 4px 6px; font-size: 13px; }
+  .ctable td:first-child { text-align: left; }
+  .ctable tr.fixed td:first-child { color: var(--muted); }
+  .ctable select { max-width: 110px; }
+  .switch { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; font-size: 12px; }
+  .mini { display: inline-block; width: 50px; height: 8px; border-radius: 4px; background: var(--surface); overflow: hidden; vertical-align: middle; }
+  .mini > span { display: block; height: 100%; background: var(--accent); }
+  .ctable .fname { max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ctable td { white-space: nowrap; }
+  .badge { font-size: 12px; padding: 2px 10px; border-radius: 12px; font-weight: 500; }
+  .badge.ok { background: var(--cell-g); color: var(--good-t); }
+  .badge.warn { background: var(--cell-m); color: var(--bad-t); }
+  .combo { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .combo-i { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); }
+  .combo-i .k { font-size: 12px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .combo-i b { font-size: 16px; font-weight: 600; }
+  .combo-i .t { font-size: 11px; color: var(--accent); }
+  .combo-i.fixed { background: var(--surface); } .combo-i.fixed .t { color: var(--muted); }
+  .combo-i.idle .t { color: var(--muted); }
+  .pred { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: flex-end; padding: 12px 14px; border-radius: 8px;
+          background: color-mix(in srgb, var(--accent) 8%, var(--bg)); margin-bottom: 12px; }
+  .pred .big { font-size: 28px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .pred .big .unit { font-size: 14px; font-weight: 400; color: var(--text-2); }
+  .pred .cmp { font-size: 13px; line-height: 1.6; }
+  .good { color: var(--good-t); font-weight: 500; } .bad { color: var(--bad-t); font-weight: 500; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>IIHS 구조 intrusion 뷰어 <small>v1.2</small></h1>
+  <header class="apphead">
+    <h1>충돌해석 도구 <small>v1.3</small></h1>
+    <nav class="appnav" id="appnav" role="tablist" aria-label="기능">
+      <button type="button" role="tab" data-page="viewer">Intrusion 뷰어</button>
+      <button type="button" role="tab" data-page="doe">DOE 분석</button>
+    </nav>
+  </header>
 
+  <section id="page-viewer">
   <div class="drop" id="drop">
     run 폴더(또는 여러 run 폴더가 든 상위 폴더)나 CSV 파일을 여기에 끌어다 놓으세요
     <div class="actions">
@@ -150,6 +319,22 @@
     <span><i style="background:var(--cell-m)"></i>Marginal</span><span><i style="background:var(--cell-p)"></i>Poor</span>
   </div>
   <div class="table-wrap" id="table"></div>
+  </section>
+
+  <section id="page-doe" class="doe" hidden>
+    <div class="doe-head">
+      <p class="doe-lead">DOE(실험계획법)로 카운터메저 인자의 영향을 분석하고 가장 좋은 수준 조합을 찾습니다.</p>
+      <div class="btns">
+        <button type="button" class="btn" data-doe="example">예제로 체험하기</button>
+        <button type="button" class="btn" data-doe="new">새로 시작</button>
+        <button type="button" class="btn" data-doe="save">저장 (.json)</button>
+        <button type="button" class="btn" data-doe="open">열기</button>
+        <input type="file" id="doe-open" accept=".json,application/json" hidden>
+      </div>
+    </div>
+    <nav class="stepper" id="doe-stepper" aria-label="DOE 단계"></nav>
+    <div id="doe-body"></div>
+  </section>
 </div>
 <div id="toasts" aria-live="polite"></div>
 
@@ -380,6 +565,466 @@ function removeFromChart(slots, runId) {
   return slots.map(id => (id === runId ? null : id));
 }
 // @core-end
+
+// @doe-core-start — DOE 순수 로직 (DOM 접근 없음, tests/doe.test.js 가 이 구간만 읽어 테스트)
+
+// ===== D1. 행렬 · 통계 =====
+const dotv = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
+const matVec = (M, x) => M.map(row => dotv(row, x));
+
+function xtx(X) {
+  const p = X[0].length, A = Array.from({ length: p }, () => Array(p).fill(0));
+  X.forEach(r => { for (let i = 0; i < p; i++) if (r[i]) for (let j = 0; j < p; j++) A[i][j] += r[i] * r[j]; });
+  return A;
+}
+
+// 가우스-조던 역행렬 (특이 행렬이면 null)
+function matInv(A) {
+  const n = A.length, M = A.map((r, i) => [...r, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
+    if (Math.abs(M[piv][c]) < 1e-12) return null;
+    [M[c], M[piv]] = [M[piv], M[c]];
+    const d = M[c][c];
+    for (let j = 0; j < 2 * n; j++) M[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c || !M[r][c]) continue;
+      const f = M[r][c];
+      for (let j = 0; j < 2 * n; j++) M[r][j] -= f * M[c][j];
+    }
+  }
+  return M.map(r => r.slice(n));
+}
+
+// 대칭 양정치 행렬의 log det (콜레스키). 양정치가 아니면 -Infinity
+function logDetSym(A) {
+  const n = A.length, L = Array.from({ length: n }, () => Array(n).fill(0));
+  let s = 0;
+  for (let i = 0; i < n; i++) for (let j = 0; j <= i; j++) {
+    let v = A[i][j];
+    for (let k = 0; k < j; k++) v -= L[i][k] * L[j][k];
+    if (i === j) {
+      if (v <= 1e-10 * Math.max(1, A[i][i])) return -Infinity;
+      L[i][i] = Math.sqrt(v);
+      s += Math.log(v);
+    } else L[i][j] = v / L[j][j];
+  }
+  return s;
+}
+
+function lgammaFn(x) {   // Lanczos 근사
+  const c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059,
+             12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+  if (x < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * x)) - lgammaFn(1 - x);
+  x -= 1;
+  let a = c[0];
+  const t = x + 7.5;
+  for (let i = 1; i < 9; i++) a += c[i] / (x + i);
+  return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+}
+
+function betacf(a, b, x) {   // 불완전 베타 연분수 (Numerical Recipes)
+  const FPMIN = 1e-300, fix = v => (Math.abs(v) < FPMIN ? FPMIN : v);
+  const qab = a + b, qap = a + 1, qam = a - 1;
+  let c = 1, d = 1 / fix(1 - qab * x / qap), h = d;
+  for (let m = 1; m <= 300; m++) {
+    const m2 = 2 * m;
+    let aa = m * (b - m) * x / ((qam + m2) * (a + m2));
+    d = 1 / fix(1 + aa * d); c = fix(1 + aa / c); h *= d * c;
+    aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
+    d = 1 / fix(1 + aa * d); c = fix(1 + aa / c);
+    const del = d * c;
+    h *= del;
+    if (Math.abs(del - 1) < 3e-14) break;
+  }
+  return h;
+}
+
+// 정규화 불완전 베타 I_x(a, b)
+function ibeta(x, a, b) {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  const bt = Math.exp(lgammaFn(a + b) - lgammaFn(a) - lgammaFn(b) + a * Math.log(x) + b * Math.log(1 - x));
+  return x < (a + 1) / (a + b + 2) ? bt * betacf(a, b, x) / a : 1 - bt * betacf(b, a, 1 - x) / b;
+}
+
+// F(d1, d2) 분포에서 F 이상이 나올 확률 = p 값
+const fPValue = (F, d1, d2) => (F >= 0 && d1 > 0 && d2 > 0 ? ibeta(d2 / (d2 + d1 * F), d2 / 2, d1 / 2) : NaN);
+
+function tCdf(t, df) {
+  const tail = 0.5 * ibeta(df / (df + t * t), df / 2, 0.5);
+  return t >= 0 ? 1 - tail : tail;
+}
+
+// t 분포 분위수 (prob > 0.5), 이분법
+function tInv(prob, df) {
+  let lo = 0, hi = 1e3;
+  for (let i = 0; i < 100; i++) {
+    const m = (lo + hi) / 2;
+    if (tCdf(m, df) < prob) lo = m; else hi = m;
+  }
+  return (lo + hi) / 2;
+}
+
+// 시드 고정 난수 (같은 입력이면 같은 D-최적 설계)
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ===== D2. 직교배열 (다구찌) =====
+// GF(q) 선형 구성: q^k run, (q^k − 1)/(q − 1) 열. 수준은 0 부터
+const GF4_MUL = [[0, 0, 0, 0], [0, 1, 2, 3], [0, 2, 3, 1], [0, 3, 1, 2]];
+function gfArray(q, k) {
+  const add = q === 4 ? (a, b) => a ^ b : (a, b) => (a + b) % q;
+  const mul = q === 4 ? (a, b) => GF4_MUL[a][b] : (a, b) => (a * b) % q;
+  const N = q ** k;
+  const digits = n => Array.from({ length: k }, (_, i) => Math.floor(n / q ** (k - 1 - i)) % q);
+  const weight = v => v.filter(Boolean).length;
+  const vecs = [];
+  for (let n = 1; n < N; n++) {
+    const v = digits(n);
+    if (v.find(Boolean) === 1) vecs.push(v);
+  }
+  // 기본 열(단위 벡터) 먼저, 나머지는 가중치 큰 순 → 인자가 적을 때 주효과와 2인자 교호작용이 덜 겹친다
+  vecs.sort((a, b) => {
+    const wa = weight(a), wb = weight(b);
+    if ((wa === 1) !== (wb === 1)) return wa === 1 ? -1 : 1;
+    return wa === 1 ? 0 : wb - wa;
+  });
+  return Array.from({ length: N }, (_, r) => {
+    const x = digits(r);
+    return vecs.map(v => v.reduce((s, vi, i) => add(s, mul(vi, x[i])), 0));
+  });
+}
+
+// L12 (Plackett–Burman): 생성 행의 순환 이동
+function pb12() {
+  const g = [1, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0];
+  const rows = Array.from({ length: 11 }, (_, i) => g.map((_, j) => g[(j - i + 11) % 11]));
+  return [Array(11).fill(0), ...rows];
+}
+
+// L18 (2^1 × 3^7) 표준표
+const L18_TABLE = ["11111111", "11222222", "11333333", "12112233", "12223311", "12331122", "13121323", "13232131", "13313212",
+                   "21133221", "21211332", "21322113", "22123132", "22231213", "22312321", "23132312", "23213123", "23321231"]
+  .map(s => [...s].map(c => Number(c) - 1));
+
+const OA_CATALOG = [
+  ["L4", () => gfArray(2, 2)], ["L8", () => gfArray(2, 3)], ["L9", () => gfArray(3, 2)], ["L12", pb12],
+  ["L16", () => gfArray(2, 4)], ["L16 (4수준)", () => gfArray(4, 2)], ["L18", () => L18_TABLE], ["L25", () => gfArray(5, 2)],
+  ["L27", () => gfArray(3, 3)], ["L32", () => gfArray(2, 5)],
+].map(([name, build]) => {
+  const rows = build();
+  return { name, rows, levels: rows[0].map((_, c) => Math.max(...rows.map(r => r[c])) + 1) };
+});
+
+// 인자마다 같은 수준 수의 열을 하나씩 배정 (못 하면 null)
+function assignColumns(oa, levels) {
+  const used = new Set(), cols = [];
+  for (const L of levels) {
+    const c = oa.levels.findIndex((l, i) => l === L && !used.has(i));
+    if (c < 0) return null;
+    used.add(c);
+    cols.push(c);
+  }
+  return cols;
+}
+
+// 맞는 직교배열 중 run 이 가장 적은 것
+function findOA(levels) {
+  for (const oa of OA_CATALOG) {
+    const cols = assignColumns(oa, levels);
+    if (cols) return { oa, cols };
+  }
+  return null;
+}
+
+function fullFactorial(levels) {
+  let rows = [[]];
+  levels.forEach(L => { rows = rows.flatMap(r => Array.from({ length: L }, (_, j) => [...r, j])); });
+  return rows;
+}
+
+// ===== D3. 모델 코딩 (효과 코딩: 수준 효과의 합 = 0) =====
+const SYMBOLS = "ABCDEFGHJKLMNPQRSTUVWXYZ";   // 인자 기호 (I, O 제외)
+
+function codeLevel(L, j) {
+  return Array.from({ length: L - 1 }, (_, c) => (j === L - 1 ? -1 : j === c ? 1 : 0));
+}
+
+// 주효과 + 교호작용 항. inters: [[f, g], ...] (인자 번호)
+function makeTerms(nFactors, inters = []) {
+  return Array.from({ length: nFactors }, (_, f) => ({ key: SYMBOLS[f], factors: [f] }))
+    .concat(inters.map(([f, g]) => ({ key: `${SYMBOLS[f]}×${SYMBOLS[g]}`, factors: [f, g] })));
+}
+
+// 한 run(수준 번호 배열)에서 이 항의 코딩 값들
+function termValues(term, levels, lv) {
+  const codes = term.factors.map(f => codeLevel(levels[f], lv[f]));
+  return codes.length === 1 ? codes[0] : codes[0].flatMap(a => codes[1].map(b => a * b));
+}
+
+const modelRow = (lv, levels, terms) => [1, ...terms.flatMap(t => termValues(t, levels, lv))];
+const paramCount = (levels, inters = []) =>
+  1 + levels.reduce((s, L) => s + L - 1, 0) + inters.reduce((s, [f, g]) => s + (levels[f] - 1) * (levels[g] - 1), 0);
+
+// ===== D4. D-최적 설계 (좌표 교환법, Meyer & Nachtsheim 1995) =====
+// N run 안에서 det(X'X) 가 최대인 배치. 시드 고정 무작위 시작 여러 번 중 최선
+function dOptimal(levels, N, { inters = [], starts = 20, seed = 1, timeLimitMs = 2500 } = {}) {
+  const terms = makeTerms(levels.length, inters), p = paramCount(levels, inters);
+  if (N < p) throw new Error(`run 수가 너무 적습니다 (최소 ${p}).`);
+  const rnd = mulberry32(seed), t0 = Date.now();
+  const ridgeInv = X => matInv(xtx(X).map((r, i) => r.map((v, j) => v + (i === j ? 1e-6 : 0))));
+  // M⁻¹ 의 순위 1 갱신 (sign +1: 행 추가, −1: 행 제거)
+  const smUpdate = (Minv, x, sign) => {
+    const u = matVec(Minv, x), d = 1 + sign * dotv(x, u);
+    return Minv.map((row, i) => row.map((v, j) => v - (sign * u[i] * u[j]) / d));
+  };
+  let best = null;
+  for (let s = 0; s < starts && (s < 3 || Date.now() - t0 < timeLimitMs); s++) {
+    // 각 인자 수준을 고르게 섞은 시작 설계
+    const rows = Array.from({ length: N }, () => Array(levels.length).fill(0));
+    levels.forEach((L, f) => {
+      const col = Array.from({ length: N }, (_, i) => i % L);
+      for (let i = N - 1; i > 0; i--) {
+        const k = Math.floor(rnd() * (i + 1));
+        [col[i], col[k]] = [col[k], col[i]];
+      }
+      col.forEach((v, i) => { rows[i][f] = v; });
+    });
+    const X = rows.map(r => modelRow(r, levels, terms));
+    let Minv = ridgeInv(X);
+    for (let pass = 0; pass < 50 && Minv; pass++) {
+      let improved = false;
+      for (let i = 0; i < N; i++) for (let f = 0; f < levels.length; f++) {
+        const xo = X[i], doo = dotv(xo, matVec(Minv, xo));
+        let bestRatio = 1 + 1e-9, bestL = -1, bestX = null;
+        for (let l = 0; l < levels[f]; l++) {
+          if (l === rows[i][f]) continue;
+          const trial = rows[i].slice();
+          trial[f] = l;
+          const xn = modelRow(trial, levels, terms), un = matVec(Minv, xn);
+          // det(M − xo xo' + xn xn') / det(M)
+          const ratio = (1 + dotv(xn, un)) * (1 - doo) + dotv(xo, un) ** 2;
+          if (ratio > bestRatio) { bestRatio = ratio; bestL = l; bestX = xn; }
+        }
+        if (bestL < 0) continue;
+        rows[i][f] = bestL;
+        X[i] = bestX;
+        Minv = doo > 0.999 ? ridgeInv(X) : smUpdate(smUpdate(Minv, xo, -1), bestX, 1);
+        improved = true;
+      }
+      Minv = ridgeInv(X);   // 누적 오차 정리
+      if (!improved) break;
+    }
+    const logDet = logDetSym(xtx(X));
+    if (!best || logDet > best.logDet) best = { rows: rows.map(r => r.slice()), logDet };
+  }
+  return best;
+}
+
+// ===== D5. 설계 방법 고르기 =====
+const FULL_MAX = 1000, DOPT_EXTRA = 3;
+
+// 방법별 run 수와 추천. 추천: 완전요인이 가장 작으면 완전요인 → 맞는 직교배열 → D-최적
+function designOptions(levels, inters = []) {
+  const p = paramCount(levels, inters), full = levels.reduce((a, L) => a * L, 1);
+  const found = inters.length ? null : findOA(levels);
+  const oa = found ? { name: found.oa.name, runs: found.oa.rows.length, cols: found.cols } : null;
+  const dopt = { min: p, runs: Math.max(p, Math.min(p + DOPT_EXTRA, full)) };
+  let recommended = "dopt";
+  if (full <= FULL_MAX && full <= (oa ? oa.runs : dopt.runs)) recommended = "full";
+  else if (oa) recommended = "oa";
+  return { p, full: { runs: full, ok: full <= FULL_MAX }, oa, dopt, recommended };
+}
+
+function buildDesign(method, levels, { inters = [], runs, seed = 2026 } = {}) {
+  if (method === "full") {
+    const rows = fullFactorial(levels);
+    if (rows.length > FULL_MAX) throw new Error(`완전요인은 ${rows.length} run 으로 너무 많습니다.`);
+    return { method, label: "완전요인", rows };
+  }
+  if (method === "oa") {
+    const f = inters.length ? null : findOA(levels);
+    if (!f) throw new Error("인자·수준에 맞는 직교배열이 없습니다.");
+    return { method, label: `${f.oa.name} 직교배열`, rows: f.oa.rows.map(r => f.cols.map(c => r[c])) };
+  }
+  const N = runs || designOptions(levels, inters).dopt.runs;
+  const d = dOptimal(levels, N, { inters, seed });
+  return { method: "dopt", label: "D-최적", rows: d.rows, logDet: d.logDet };
+}
+
+// ===== D6. ANOVA (최소제곱, Type III 제곱합) =====
+// 수정 그람-슈미트 최소제곱. 앞 열들과 종속인 열은 건너뛴다 (keep = 쓴 열 번호)
+function lsq(cols, y) {
+  const n = y.length, Q = [], keep = [], r = y.slice();
+  cols.forEach((c, i) => {
+    const c0 = Math.sqrt(dotv(c, c));
+    if (!c0) return;
+    const v = c.slice();
+    for (let pass = 0; pass < 2; pass++) Q.forEach(q => { const t = dotv(q, v); for (let k = 0; k < n; k++) v[k] -= t * q[k]; });
+    const nv = Math.sqrt(dotv(v, v));
+    if (nv <= 1e-8 * c0) return;
+    const q = v.map(x => x / nv);
+    Q.push(q);
+    keep.push(i);
+    const t = dotv(q, r);
+    for (let k = 0; k < n; k++) r[k] -= t * q[k];
+  });
+  return { sse: Math.max(0, dotv(r, r)), rank: Q.length, keep };
+}
+
+// levels: 인자별 수준 수, rows: run 별 수준 번호, y: 결과 (NaN 은 제외), terms: makeTerms, pooled: 오차로 합칠 항 key
+function anovaFit({ levels, rows, y, terms, pooled = [] }) {
+  const used = y.map((v, i) => (Number.isFinite(v) ? i : -1)).filter(i => i >= 0);
+  const R = used.map(i => rows[i]), Y = used.map(i => y[i]), n = Y.length;
+  const mean = Y.reduce((a, b) => a + b, 0) / n;
+  const sst = Y.reduce((s, v) => s + (v - mean) ** 2, 0);
+  const one = Array(n).fill(1);
+  const termCols = terms.map(t => {
+    const vals = R.map(r => termValues(t, levels, r));
+    return vals[0].map((_, c) => vals.map(v => v[c]));
+  });
+  const pooledSet = new Set(pooled);
+  const active = terms.map((_, i) => i).filter(i => !pooledSet.has(terms[i].key));
+  const fitWith = list => lsq([one, ...list.flatMap(i => termCols[i])], Y);
+  const full = fitWith(active);
+  const dfE = n - full.rank, sse = full.sse, mse = dfE > 0 ? sse / dfE : NaN;
+
+  const table = terms.map((t, i) => {
+    const isPooled = pooledSet.has(t.key);
+    let ss, df;
+    if (isPooled) {   // 풀링한 항: 모델에 다시 넣었을 때 줄어드는 제곱합
+      const w = fitWith([...active, i]);
+      ss = Math.max(0, full.sse - w.sse); df = w.rank - full.rank;
+    } else {          // Type III: 이 항만 뺐을 때 늘어나는 제곱합
+      const wo = fitWith(active.filter(j => j !== i));
+      ss = Math.max(0, wo.sse - full.sse); df = full.rank - wo.rank;
+    }
+    const ms = df > 0 ? ss / df : NaN;
+    const F = !isPooled && dfE > 0 && df > 0 ? ms / mse : NaN;
+    const dfFull = t.factors.reduce((a, f) => a * (levels[f] - 1), 1);
+    return { key: t.key, factors: t.factors, pooled: isPooled, df, dfFull, ss, ms, F,
+             p: Number.isFinite(F) ? fPValue(F, df, dfE) : NaN, contrib: sst > 0 ? (ss / sst) * 100 : 0 };
+  });
+
+  // 예측용 계수: 독립 열만으로 정규방정식
+  const cols = [one, ...active.flatMap(i => termCols[i])];
+  const Xk = full.keep.map(c => cols[c]);
+  const Ainv = matInv(Xk.map(a => Xk.map(b => dotv(a, b))));
+  const coef = Ainv ? matVec(Ainv, Xk.map(c => dotv(c, Y))) : null;
+  return {
+    n, mean, sst, sse, dfE, mse, table, used,
+    r2: sst > 0 ? 1 - sse / sst : 1,
+    adjR2: dfE > 0 && sst > 0 && n > 1 ? 1 - (sse / dfE) / (sst / (n - 1)) : NaN,
+    model: { levels, terms: active.map(i => terms[i]), keep: full.keep, coef, Ainv, mse, dfE },
+  };
+}
+
+// 오차 자유도가 2 보다 작으면 제곱합이 가장 작은 항부터 오차로 합친다 (다구찌 풀링)
+function autoPool(args) {
+  let pooled = [];
+  for (;;) {
+    const fit = anovaFit({ ...args, pooled });
+    const act = fit.table.filter(t => !t.pooled);
+    if (fit.dfE >= 2 || act.length <= 1) return { pooled, fit };
+    pooled = [...pooled, act.reduce((a, b) => (b.ss < a.ss ? b : a)).key];
+  }
+}
+
+// 모델 예측값과 표준오차 (평균 반응의 신뢰구간용)
+function predictModel(model, lv) {
+  if (!model.coef) return { y: NaN, se: NaN };
+  const full = [1, ...model.terms.flatMap(t => termValues(t, model.levels, lv))];
+  const x = model.keep.map(c => full[c]);
+  const y = dotv(x, model.coef);
+  const se = model.dfE > 0 ? Math.sqrt(Math.max(0, model.mse * dotv(x, matVec(model.Ainv, x)))) : NaN;
+  return { y, se };
+}
+
+// 주효과도: 인자 수준별 보정 평균 (다른 인자는 수준 평균). 직교 설계면 단순 수준 평균과 같다
+function lsMeans(levels, rows, y) {
+  const terms = makeTerms(levels.length);
+  const { model } = anovaFit({ levels, rows, y, terms });
+  return levels.map((L, f) => Array.from({ length: L }, (_, j) => {
+    const full = [1, ...terms.flatMap(t => (t.factors[0] === f ? codeLevel(L, j) : Array(levels[t.factors[0]] - 1).fill(0)))];
+    return model.coef ? dotv(model.keep.map(c => full[c]), model.coef) : NaN;
+  }));
+}
+
+// ===== D7. 최적 수준 조합 =====
+// control[f] = true 인 인자(컨트롤 팩터)만 바꾸고 나머지는 fixed[f] 수준으로 고정.
+// objective: { resp, goal: "min" | "max" | "target", target }, constraints: [{ resp, op: "<=" | ">=", value }]
+const ENUM_MAX = 200000;
+function optimizeLevels({ levels, models, objective, constraints = [], control, fixed }, topK = 5) {
+  const free = levels.map((_, f) => f).filter(f => control[f]);
+  const total = free.reduce((a, f) => a * levels[f], 1);
+  const evaluate = lv => {
+    const preds = {};
+    Object.keys(models).forEach(k => { preds[k] = predictModel(models[k], lv).y; });
+    const y = preds[objective.resp];
+    const score = objective.goal === "max" ? -y : objective.goal === "target" ? Math.abs(y - objective.target) : y;
+    let violation = 0;
+    constraints.forEach(c => {
+      const v = preds[c.resp];
+      if (!Number.isFinite(v)) return;
+      const ex = c.op === ">=" ? c.value - v : v - c.value;
+      if (ex > 1e-9) violation += ex / (Math.abs(c.value) || 1);
+    });
+    return { levels: lv.slice(), preds, score, feasible: violation === 0, violation };
+  };
+  const cmp = (a, b) => (a.feasible !== b.feasible ? (a.feasible ? -1 : 1)
+    : a.feasible ? a.score - b.score : a.violation - b.violation || a.score - b.score);
+  const top = [], seen = new Set();
+  const keep = c => {
+    const k = c.levels.join(",");
+    if (seen.has(k)) return;
+    seen.add(k);
+    top.push(c);
+    top.sort(cmp);
+    if (top.length > topK) seen.delete(top.pop().levels.join(","));
+  };
+  const base = levels.map((_, f) => (control[f] ? 0 : fixed[f] || 0));
+  let evaluated = 0;
+  if (total <= ENUM_MAX) {   // 모든 조합
+    const lv = base.slice();
+    const rec = k => {
+      if (k === free.length) { evaluated++; keep(evaluate(lv)); return; }
+      for (let j = 0; j < levels[free[k]]; j++) { lv[free[k]] = j; rec(k + 1); }
+    };
+    rec(0);
+    return { top, evaluated, exhaustive: true };
+  }
+  const rnd = mulberry32(11);   // 조합이 너무 많으면 다중 시작 좌표 하강
+  for (let s = 0; s < 40; s++) {
+    const lv = base.slice();
+    free.forEach(f => { lv[f] = Math.floor(rnd() * levels[f]); });
+    let cur = evaluate(lv);
+    evaluated++;
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const f of free) for (let j = 0; j < levels[f]; j++) {
+        if (j === cur.levels[f]) continue;
+        const t = cur.levels.slice();
+        t[f] = j;
+        const c = evaluate(t);
+        evaluated++;
+        if (cmp(c, cur) < 0) { cur = c; changed = true; }
+      }
+    }
+    keep(cur);
+  }
+  return { top, evaluated, exhaustive: false };
+}
+// @doe-core-end
 
 // ===== 4. 상태 (시험 탭마다 따로) =====
 // runs: runId 순 정렬, shown: 표 ON/OFF { runId: bool }, slots: 그래프 칸 (최대 3)
@@ -772,8 +1417,781 @@ document.getElementById("table").addEventListener("change", e => {
 document.getElementById("legend").innerHTML = RATINGS.map((n, k) =>
   `<span><span class="swatch" style="background:${BAND_COLORS[k]};opacity:.55"></span>${n}</span>`).join("");
 
-darkQuery.addEventListener("change", render);
+darkQuery.addEventListener("change", () => { render(); if (page === "doe") renderDoe(); });
 render();
+
+// ===== 8. 앱 기능 탭 (Intrusion 뷰어 / DOE 분석) =====
+const PAGE_KEY = "crash-cae-page";
+let page = "viewer";
+try { if (localStorage.getItem(PAGE_KEY) === "doe") page = "doe"; } catch (e) { /* 저장소를 못 쓰면 기본 화면 */ }
+
+function renderApp() {
+  document.querySelectorAll("#appnav [data-page]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.page === page)));
+  document.getElementById("page-viewer").hidden = page !== "viewer";
+  document.getElementById("page-doe").hidden = page !== "doe";
+  if (page === "doe") renderDoe();
+}
+
+document.getElementById("appnav").addEventListener("click", e => {
+  const b = e.target.closest("[data-page]");
+  if (!b || b.dataset.page === page) return;
+  page = b.dataset.page;
+  try { localStorage.setItem(PAGE_KEY, page); } catch (err) { /* 무시 */ }
+  renderApp();
+});
+
+// ===== 9. DOE 상태 (브라우저에 자동 저장, .json 으로 저장·열기) =====
+const DOE_KEY = "crash-cae-doe-v1";
+let uidSeq = Date.now();
+const uid = () => (uidSeq++).toString(36);
+const blankFactor = () => ({ id: uid(), name: "", unit: "", levelsText: "" });
+const newOpt = () => ({ resp: null, goal: "min", target: 0, constraints: [], control: {}, fixed: {} });
+const newDoe = () => ({ step: 1, factors: [blankFactor(), blankFactor()], method: "auto", doptRuns: null, inters: [],
+                        design: null, responses: [], results: {}, anovaCfg: {}, activeResp: null, opt: newOpt() });
+
+function loadDoe() {
+  try {
+    const s = JSON.parse(localStorage.getItem(DOE_KEY));
+    if (s && Array.isArray(s.factors)) return { ...newDoe(), ...s, opt: { ...newOpt(), ...s.opt } };
+  } catch (e) { /* 저장된 게 없거나 깨짐 */ }
+  return newDoe();
+}
+let doe = loadDoe();
+const anaCache = new Map();
+function saveDoe() {
+  anaCache.clear();
+  try { localStorage.setItem(DOE_KEY, JSON.stringify(doe)); } catch (e) { /* 저장 실패해도 화면은 동작 */ }
+}
+
+// "1.2, 1.6, 2.0" → ["1.2", "1.6", "2.0"]
+const parseLevels = text => [...new Set(String(text).split(/[,，、]/).map(s => s.trim()).filter(Boolean))];
+const respById = id => doe.responses.find(r => r.id === id);
+const factorLabel = (f, i) => `${SYMBOLS[i]} · ${f.name}${f.unit ? ` (${f.unit})` : ""}`;
+const levelText = (f, j) => `${f.levels[j]}${f.unit && /^[-+]?[\d.]+$/.test(f.levels[j]) ? ` ${f.unit}` : ""}`;
+const GOALS = { min: "작을수록 좋음", max: "클수록 좋음" };
+const fmtN = v => {
+  if (!Number.isFinite(v)) return "–";
+  const a = Math.abs(v);
+  return a >= 1000 ? v.toFixed(0) : a >= 100 ? v.toFixed(1) : a >= 1 ? v.toFixed(2) : a === 0 ? "0" : v.toPrecision(3);
+};
+const fmtP = p => (!Number.isFinite(p) ? "–" : p < 0.001 ? "< 0.001" : p.toFixed(3));
+const help = text => `<details class="help"><summary>도움말</summary><p>${text}</p></details>`;
+const bestIdx = (means, goal) => means.reduce((b, v, j) => (goal === "max" ? v > means[b] : v < means[b]) ? j : b, 0);
+
+// 교호작용은 인자 id 쌍으로 저장 → 인자 번호 쌍
+const interIdx = (pairs, factors) => pairs
+  .map(([a, b]) => [factors.findIndex(f => f.id === a), factors.findIndex(f => f.id === b)])
+  .filter(([f, g]) => f >= 0 && g >= 0 && f !== g)
+  .map(([f, g]) => (f < g ? [f, g] : [g, f]));
+const factorPairs = factors => factors.flatMap((a, i) => factors.slice(i + 1).map(b => [a, b]));
+const hasPair = (pairs, a, b) => pairs.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+
+function factorIssues(factors) {
+  const issues = [];
+  if (factors.length < 2) issues.push("인자는 2개 이상 필요합니다.");
+  if (factors.length > 15) issues.push("인자는 15개까지 다룰 수 있습니다.");
+  const names = factors.map(f => f.name.trim());
+  factors.forEach((f, i) => {
+    const L = parseLevels(f.levelsText).length;
+    if (!names[i]) issues.push(`${SYMBOLS[i]}: 인자 이름을 입력하세요.`);
+    else if (names.indexOf(names[i]) !== i) issues.push(`${SYMBOLS[i]}: 이름 "${names[i]}" 이 겹칩니다.`);
+    if (L < 2) issues.push(`${SYMBOLS[i]}: 수준을 2개 이상 쉼표로 구분해 입력하세요 (예: 1.0, 1.2, 1.4).`);
+    if (L > 9) issues.push(`${SYMBOLS[i]}: 수준은 9개까지입니다.`);
+  });
+  return issues;
+}
+
+const snapshotFactors = () => doe.factors.map(f => ({ id: f.id, name: f.name.trim(), unit: f.unit.trim(), levels: parseLevels(f.levelsText) }));
+function designStale() {
+  const d = doe.design;
+  if (!d) return false;
+  const sig = fs => fs.map(f => `${f.name}/${f.unit}/${f.levels.join("|")}`).join("#");
+  const inters = fs => interIdx(doe.inters, fs).map(p => p.join("-")).sort().join(",");
+  return sig(snapshotFactors()) !== sig(d.factors) || inters(doe.factors) !== d.inters.map(p => p.join("-")).sort().join(",");
+}
+const hasResults = () => Object.values(doe.results).some(a => a.some(v => v !== null));
+const resultValues = id => (doe.results[id] || []).map(v => (v === null || v === undefined || v === "" ? NaN : Number(v)));
+const analyzable = () => (doe.design ? doe.responses.filter(r => resultValues(r.id).filter(Number.isFinite).length >= 3).map(r => r.id) : []);
+
+// 반응 하나의 ANOVA (풀링 설정이 없으면 자동 풀링)
+function analyze(respId) {
+  const d = doe.design, cfg = doe.anovaCfg[respId] || {};
+  const key = `${respId}|${JSON.stringify(cfg)}|${JSON.stringify(doe.results[respId])}`;
+  if (anaCache.has(key)) return anaCache.get(key);
+  const levels = d.factors.map(f => f.levels.length);
+  const inters = interIdx(cfg.inters || [], d.factors);
+  const terms = makeTerms(levels.length, inters);
+  const y = resultValues(respId);
+  const args = { levels, rows: d.rows, y, terms };
+  const auto = !cfg.pooled;
+  const { pooled, fit } = auto ? autoPool(args)
+    : { pooled: cfg.pooled, fit: anovaFit({ ...args, pooled: cfg.pooled.filter(k => terms.some(t => t.key === k)) }) };
+  const res = { fit, auto, pooled, terms, inters, y, lsm: lsMeans(levels, d.rows, y),
+                missing: y.map((v, i) => (Number.isFinite(v) ? 0 : i + 1)).filter(Boolean) };
+  anaCache.set(key, res);
+  return res;
+}
+
+// ===== 10. DOE 화면 =====
+const METHOD_INFO = {
+  oa: ["직교배열 (다구찌)", "각 인자의 수준이 같은 횟수로 고르게 섞여 효과를 깨끗하게 분리합니다. 주효과를 볼 때 가장 효율적입니다 (주효과 모델의 D-최적 설계이기도 합니다)."],
+  dopt: ["D-최적", "정한 run 수 안에서 효과를 가장 정밀하게 추정하는 조합을 컴퓨터가 찾습니다. 맞는 직교배열이 없거나, run 을 줄이거나, 교호작용을 보고 싶을 때."],
+  full: ["완전요인", "모든 수준 조합을 다 해석합니다. 가장 정확하지만 run 이 많습니다."],
+};
+
+function renderDoe() {
+  const ready = [true, !!doe.design, analyzable().length > 0];
+  if (!ready[doe.step - 1]) doe.step = ready[1] ? 2 : 1;
+  const steps = [["실험 설계", "인자·수준 → run 표"], ["결과 입력 · ANOVA", "영향이 큰 인자 찾기"], ["최적화", "가장 좋은 조합 찾기"]];
+  const why = ["", "먼저 1단계에서 설계를 만드세요", "먼저 결과를 3개 run 이상 입력하세요"];
+  document.getElementById("doe-stepper").innerHTML = steps.map(([t, s], i) => {
+    const n = i + 1, done = n < doe.step && ready[i];
+    return `<button type="button" data-doe="goto" data-step="${n}" ${ready[i] ? "" : `disabled title="${why[i]}"`}
+        ${doe.step === n ? 'aria-current="step"' : ""} class="${done ? "done" : ""}">
+      <span class="n">${done ? "✓" : n}</span><span><b>${t}</b><small>${s}</small></span></button>`;
+  }).join("");
+  const body = document.getElementById("doe-body");
+  if (doe.step === 1) { body.innerHTML = step1Html(); renderMethods(); renderDesignPanel(); }
+  if (doe.step === 2) { body.innerHTML = step2Html(); renderResponses(); renderResultsTable(); renderAnova(); }
+  if (doe.step === 3) { body.innerHTML = step3Html(); renderOpt(); }
+}
+
+// ----- 1단계: 실험 설계 -----
+function factorRow(f, i) {
+  return `<tr><td class="sym">${SYMBOLS[i]}</td>
+    <td><input type="text" data-ff="name" data-id="${f.id}" value="${esc(f.name)}" placeholder="예: Toepan 두께" aria-label="${SYMBOLS[i]} 인자 이름"></td>
+    <td><input type="text" class="w-unit" data-ff="unit" data-id="${f.id}" value="${esc(f.unit)}" placeholder="mm" aria-label="${SYMBOLS[i]} 단위"></td>
+    <td><input type="text" data-ff="levelsText" data-id="${f.id}" value="${esc(f.levelsText)}" placeholder="예: 0.8, 1.0, 1.2" aria-label="${SYMBOLS[i]} 수준"></td>
+    <td class="cnt" data-cnt="${f.id}">${parseLevels(f.levelsText).length || "–"}</td>
+    <td><button type="button" class="x" data-doe="del-factor" data-id="${f.id}" ${doe.factors.length <= 2 ? "disabled" : ""}
+        aria-label="${SYMBOLS[i]} 삭제">삭제</button></td></tr>`;
+}
+
+function step1Html() {
+  const fresh = !doe.design && doe.factors.every(f => !f.name && !f.levelsText);
+  return `${fresh ? `<div class="intro"><span><b>처음이신가요?</b> 차체 카운터메저 5인자 예제(L18)로 세 단계를 먼저 둘러보세요.</span>
+      <button type="button" class="btn primary" data-doe="example">예제로 체험하기</button></div>` : ""}
+    <section class="panel">
+      <div class="panel-h"><h3><span class="num">1</span>인자와 수준</h3>
+        ${help("인자(factor)는 바꿔 볼 설계 변수, 수준(level)은 넣어 볼 값입니다. 숫자(1.2, 1.6, 2.0)든 글자(없음, 있음)든 쉼표로 구분해 적으세요. 보통 2~3 수준이면 충분하고, 3 수준이면 휘는(비선형) 경향도 볼 수 있습니다.")}</div>
+      <div class="table-wrap"><table class="ftable"><thead><tr><th>기호</th><th>인자 이름</th><th>단위</th><th>수준 (쉼표로 구분)</th><th>수준 수</th><th></th></tr></thead>
+        <tbody>${doe.factors.map(factorRow).join("")}</tbody></table></div>
+      <div class="actions-row"><button type="button" class="btn" data-doe="add-factor">+ 인자 추가</button></div>
+    </section>
+    <section class="panel">
+      <div class="panel-h"><h3><span class="num">2</span>설계 방법</h3>
+        ${help(`<b>자동 추천</b>을 그대로 쓰면 됩니다. ${METHOD_INFO.oa[0]}: ${METHOD_INFO.oa[1]} ${METHOD_INFO.dopt[0]}: ${METHOD_INFO.dopt[1]} ${METHOD_INFO.full[0]}: ${METHOD_INFO.full[1]}`)}</div>
+      <div id="doe-methods"></div>
+    </section>
+    <section class="panel" id="doe-design"></section>`;
+}
+
+function renderMethods() {
+  const el = document.getElementById("doe-methods");
+  if (!el) return;
+  const issues = factorIssues(doe.factors);
+  if (issues.length) { el.innerHTML = `<div class="notice">${issues.map(esc).join("<br>")}</div>`; return; }
+  const levels = doe.factors.map(f => parseLevels(f.levelsText).length);
+  const inters = interIdx(doe.inters, doe.factors);
+  const o = designOptions(levels, inters);
+  const druns = Math.max(o.p, doe.doptRuns || o.dopt.runs);
+  const runsOf = m => (m === "oa" ? o.oa.runs : m === "full" ? o.full.runs : druns);
+  const nameOf = m => (m === "oa" ? `${o.oa.name} 직교배열` : m === "full" ? "완전요인" : "D-최적");
+  const cards = [
+    ["auto", "자동 추천", `${nameOf(o.recommended)} · ${runsOf(o.recommended)} run`, "인자·수준 수에 맞춰 가장 알맞은 방법을 고릅니다.", true],
+    ["oa", METHOD_INFO.oa[0], o.oa ? `${o.oa.name} · ${o.oa.runs} run` : inters.length ? "교호작용을 고르면 쓰지 않음" : "맞는 배열 없음", "수준이 고르게 섞인 표준 표", !!o.oa],
+    ["dopt", METHOD_INFO.dopt[0], `${druns} run (최소 ${o.p})`, "run 수를 정하면 가장 정밀한 조합을 계산", true],
+    ["full", METHOD_INFO.full[0], `${o.full.runs} run${o.full.ok ? "" : " (너무 많음)"}`, "모든 조합", o.full.ok],
+  ];
+  if (!cards.find(c => c[0] === doe.method)[4]) doe.method = "auto";
+  const chosen = doe.method === "auto" ? o.recommended : doe.method;
+  const pairs = factorPairs(doe.factors);
+  el.innerHTML = `<div class="mcards" role="radiogroup" aria-label="설계 방법">${cards.map(([id, t, sub, desc, ok]) => `
+      <label class="mcard ${doe.method === id ? "on" : ""} ${ok ? "" : "off"}">
+        <input type="radio" name="doe-method" value="${id}" ${doe.method === id ? "checked" : ""} ${ok ? "" : "disabled"}>
+        <b>${t}${id === "auto" ? ' <span class="tag">추천</span>' : ""}</b><span class="sub">${sub}</span><span class="desc">${desc}</span></label>`).join("")}</div>
+    <details class="adv" ${chosen === "dopt" || inters.length ? "open" : ""}><summary>고급: D-최적 run 수 · 교호작용</summary>
+      <div class="adv-body">
+        <div><label>D-최적 run 수 <input type="number" class="w-num" data-doe-in="druns" min="${o.p}" max="500" value="${druns}"></label>
+          <span class="muted">최소 ${o.p} (추정할 계수 수). 오차 자유도를 위해 ${DOPT_EXTRA} 이상 여유를 두는 것을 추천합니다.</span></div>
+        <div class="muted">교호작용: 두 인자를 함께 바꿀 때 효과가 달라지는지 봅니다. 고르면 D-최적이나 완전요인으로 설계합니다.</div>
+        <div class="inter-list">${pairs.map(([a, b]) => `<label><input type="checkbox" data-inter="${a.id}|${b.id}" ${hasPair(doe.inters, a.id, b.id) ? "checked" : ""}>
+          ${SYMBOLS[doe.factors.indexOf(a)]}×${SYMBOLS[doe.factors.indexOf(b)]}</label>`).join("")}</div>
+      </div></details>
+    <div class="buildbar"><span>선택: <b>${nameOf(chosen)}</b> · <b>${runsOf(chosen)} run</b> · 인자 ${levels.length}개${inters.length ? ` + 교호작용 ${inters.length}개` : ""} · 오차 자유도 ${runsOf(chosen) - o.p}</span>
+      <button type="button" class="btn primary" data-doe="build">설계 만들기</button></div>`;
+}
+
+function renderDesignPanel() {
+  const el = document.getElementById("doe-design");
+  if (!el) return;
+  const d = doe.design;
+  const head = `<div class="panel-h"><h3><span class="num">3</span>실험 표 (해석할 run 목록)</h3>${d ? `<div class="btns">
+      <button type="button" class="btn" data-doe="export-csv">CSV 내보내기</button>
+      <button type="button" class="btn" data-doe="copy-design">엑셀로 복사</button></div>` : ""}</div>`;
+  if (!d) { el.innerHTML = `${head}<p class="empty">인자와 수준을 정하고 "설계 만들기"를 누르면 해석할 run 목록이 여기에 나옵니다.</p>`; return; }
+  const levels = d.factors.map(f => f.levels.length), dfE = d.rows.length - paramCount(levels, d.inters);
+  el.innerHTML = `${head}
+    ${designStale() ? `<div class="notice">인자 정의가 바뀌었습니다. 아래는 이전 설계입니다. 바뀐 내용으로 다시 만들려면 위에서 "설계 만들기"를 누르세요.</div>` : ""}
+    <div class="facts"><span class="pill">${esc(d.label)}</span><span class="pill">${d.rows.length} run</span>
+      <span class="pill">인자 ${levels.length}개${d.inters.length ? ` + 교호작용 ${d.inters.length}개` : ""}</span><span class="pill">오차 자유도 ${dfE}</span></div>
+    <p class="muted">${METHOD_INFO[d.method][1]}${dfE <= 0 ? " 오차 자유도가 0 이라 ANOVA 에서 영향이 작은 인자를 오차로 합쳐(풀링) 분석합니다." : ""}
+      색이 진할수록 높은 수준입니다. 이 표대로 해석을 돌린 뒤 2단계에 결과를 넣으세요.</p>
+    <div class="table-wrap"><table class="dtable"><thead><tr><th>Run</th>${d.factors.map((f, i) => `<th>${esc(factorLabel(f, i))}</th>`).join("")}</tr></thead>
+      <tbody>${d.rows.map((r, k) => `<tr><td>${k + 1}</td>${r.map((j, i) => `<td class="lv${j}">${esc(d.factors[i].levels[j])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    <div class="actions-row end"><button type="button" class="btn primary" data-doe="goto" data-step="2">다음: 결과 입력 →</button></div>`;
+}
+
+function buildFromUi() {
+  const issues = factorIssues(doe.factors);
+  if (issues.length) { notify(issues[0], "error"); return; }
+  if (hasResults() && !confirm("새 설계를 만들면 지금 입력한 결과가 지워집니다. 계속할까요?")) return;
+  const factors = snapshotFactors(), levels = factors.map(f => f.levels.length), inters = interIdx(doe.inters, factors);
+  const o = designOptions(levels, inters);
+  const method = doe.method === "auto" ? o.recommended : doe.method;
+  let d;
+  try { d = buildDesign(method, levels, { inters, runs: Math.max(o.p, doe.doptRuns || o.dopt.runs) }); }
+  catch (e) { notify(e.message, "error"); return; }
+  const label = d.label;
+  doe.design = { method: d.method, label, rows: d.rows, factors, inters };
+  doe.results = Object.fromEntries(doe.responses.map(r => [r.id, Array(d.rows.length).fill(null)]));
+  doe.anovaCfg = {};
+  doe.opt = { ...newOpt(), constraints: [] };
+  saveDoe();
+  renderDoe();
+  notify(`${label} 설계를 만들었습니다 (${d.rows.length} run).`);
+}
+
+// ----- 2단계: 결과 입력 · ANOVA -----
+const doeImport = { test: null };
+function step2Html() {
+  return `<section class="panel">
+      <div class="panel-h"><h3><span class="num">1</span>반응(결과) 항목</h3>
+        ${help("반응은 run 마다 나온 해석 결과 값입니다 (예: Left toepan intrusion, 질량 증가). 목표 방향(작을수록/클수록 좋음)은 주효과 그래프의 '좋은 수준' 표시와 최적화 기본값에 쓰입니다.")}</div>
+      <div id="doe-resp"></div>
+      <form class="inline-form" data-form="add-resp">
+        <input type="text" name="name" placeholder="반응 이름 (예: Left toepan)" required aria-label="반응 이름">
+        <input type="text" name="unit" class="w-unit" placeholder="단위" aria-label="단위">
+        <select name="goal" aria-label="목표"><option value="min">작을수록 좋음</option><option value="max">클수록 좋음</option></select>
+        <button type="submit" class="btn">+ 반응 추가</button>
+      </form>
+      <details class="adv"><summary>Intrusion 뷰어에 불러온 run 에서 가져오기</summary><div class="adv-body" id="doe-import"></div></details>
+    </section>
+    <section class="panel">
+      <div class="panel-h"><h3><span class="num">2</span>결과 입력</h3>
+        <div class="btns"><span class="muted" id="doe-progress"></span><button type="button" class="btn" data-doe="export-csv">CSV 내보내기</button></div></div>
+      <p class="muted">엑셀에서 값을 복사해 칸에 붙여넣으면 아래·오른쪽으로 한 번에 채워집니다. 첫 줄에 반응 이름까지 같이 복사하면 반응 항목도 자동으로 만들어집니다.</p>
+      <div class="table-wrap" id="doe-results"></div>
+    </section>
+    <section class="panel" id="doe-anova"></section>
+    <div class="actions-row end"><button type="button" class="btn primary" data-doe="goto" data-step="3" ${analyzable().length ? "" : "disabled"}>다음: 최적화 →</button></div>`;
+}
+
+function renderResponses() {
+  const el = document.getElementById("doe-resp");
+  if (!el) return;
+  el.innerHTML = doe.responses.length ? `<div class="chips">${doe.responses.map(r => `<span class="rchip">${esc(r.name)}${r.unit ? ` <span class="muted">(${esc(r.unit)})</span>` : ""}
+      <select data-rgoal="${r.id}" aria-label="${esc(r.name)} 목표">${Object.entries(GOALS).map(([g, t]) => `<option value="${g}" ${r.goal === g ? "selected" : ""}>${t}</option>`).join("")}</select>
+      <button type="button" class="x" data-doe="del-resp" data-id="${r.id}" aria-label="${esc(r.name)} 삭제">✕</button></span>`).join("")}</div>`
+    : `<p class="empty">아직 반응 항목이 없습니다. 아래에서 추가하거나, 엑셀에서 이름 줄까지 복사해 결과 표에 붙여넣으세요.</p>`;
+  renderImport();
+}
+
+function renderImport() {
+  const el = document.getElementById("doe-import");
+  if (!el) return;
+  const withRuns = Object.values(PROTOCOLS).filter(p => state.tabs[p.id].runs.length);
+  if (!withRuns.length) {
+    el.innerHTML = `<p class="muted">Intrusion 뷰어에 불러온 run 이 없습니다. 먼저 'Intrusion 뷰어' 탭에서 해석 결과 폴더를 불러오세요. DOE run 번호와 run_id 가 같은 run 을 짝지어 측정위치 값을 반응으로 가져옵니다.</p>`;
+    return;
+  }
+  if (!withRuns.some(p => p.id === doeImport.test)) doeImport.test = withRuns[0].id;
+  const p = PROTOCOLS[doeImport.test], runs = state.tabs[p.id].runs, N = doe.design.rows.length;
+  const matched = Array.from({ length: N }, (_, k) => runs.some(r => r.runId === String(k + 1))).filter(Boolean).length;
+  el.innerHTML = `<p class="muted">DOE run 번호 = run_id 로 짝짓습니다 (DOE run 3 ← run_id 3). 측정위치마다 반응 항목이 하나씩 생깁니다.</p>
+    <div class="btns"><label>시험 <select data-imp="test">${withRuns.map(q => `<option value="${q.id}" ${q.id === p.id ? "selected" : ""}>${q.tab} (run ${state.tabs[q.id].runs.length}개)</option>`).join("")}</select></label>
+      <span class="muted">DOE ${N} run 중 ${matched}개 일치</span></div>
+    <div class="inter-list">${p.locations.map(l => `<label><input type="checkbox" data-imp-loc="${l.key}" checked> ${esc(l.name)}</label>`).join("")}</div>
+    <div><button type="button" class="btn primary" data-doe="import" ${matched ? "" : "disabled"}>선택한 측정위치 가져오기</button></div>`;
+}
+
+function importFromViewer() {
+  const p = PROTOCOLS[doeImport.test], runs = state.tabs[p.id].runs, N = doe.design.rows.length;
+  const keys = [...document.querySelectorAll("[data-imp-loc]:checked")].map(i => i.dataset.impLoc);
+  if (!keys.length) { notify("가져올 측정위치를 고르세요.", "error"); return; }
+  const overwritten = [];
+  keys.forEach(k => {
+    const loc = p.locations.find(l => l.key === k);
+    let r = doe.responses.find(x => x.name === loc.name);
+    if (!r) { r = { id: uid(), name: loc.name, unit: "mm", goal: "min" }; doe.responses.push(r); }
+    else if ((doe.results[r.id] || []).some(v => v !== null)) overwritten.push(r.name);
+    const prev = doe.results[r.id] || [];
+    doe.results[r.id] = Array.from({ length: N }, (_, i) => {
+      const run = runs.find(x => x.runId === String(i + 1)), v = run && run.values[k];
+      return Number.isFinite(v) ? Number(v.toFixed(3)) : prev[i] ?? null;
+    });
+  });
+  saveDoe();
+  renderDoe();
+  notify(`${p.tab} 에서 측정위치 ${keys.length}개 결과를 가져왔습니다.${overwritten.length ? ` 같은 이름이라 덮어쓴 반응: ${overwritten.join(", ")}` : ""}`);
+}
+
+function renderResultsTable() {
+  const el = document.getElementById("doe-results");
+  if (!el) return;
+  const d = doe.design, cols = doe.responses.length ? doe.responses : [{ id: "", name: "" }];
+  el.innerHTML = `<table class="dtable rtable"><thead><tr><th>Run</th>${d.factors.map((f, i) => `<th title="${esc(factorLabel(f, i))}">${SYMBOLS[i]}</th>`).join("")}
+      ${cols.map(r => `<th class="rh">${r.id ? `${esc(r.name)}${r.unit ? `<br><span class="muted">${esc(r.unit)}</span>` : ""}` : "여기에 붙여넣기"}</th>`).join("")}</tr></thead>
+    <tbody>${d.rows.map((row, k) => `<tr><td>${k + 1}</td>${row.map((j, i) => `<td class="lv${j}">${esc(d.factors[i].levels[j])}</td>`).join("")}
+      ${cols.map((r, ri) => { const v = r.id ? (doe.results[r.id] || [])[k] : null;
+        return `<td class="in"><input type="text" inputmode="decimal" data-run="${k}" data-ri="${ri}" value="${v === null || v === undefined ? "" : v}"
+          aria-label="run ${k + 1} ${esc(r.name)}"></td>`; }).join("")}</tr>`).join("")}</tbody></table>`;
+  updateProgress();
+}
+
+function updateProgress() {
+  const el = document.getElementById("doe-progress");
+  if (!el || !doe.design) return;
+  const N = doe.design.rows.length;
+  const done = doe.responses.length ? Array.from({ length: N }, (_, k) => doe.responses.every(r => Number.isFinite(resultValues(r.id)[k]))).filter(Boolean).length : 0;
+  el.textContent = `입력 완료 ${done} / ${N} run`;
+}
+
+const toNum = c => { const t = String(c).trim().replace(/,/g, ""); if (t === "") return null; const v = Number(t); return Number.isFinite(v) ? v : undefined; };
+function setResult(id, run, c) {
+  const N = doe.design.rows.length;
+  if (run >= N) return;
+  const arr = doe.results[id] = doe.results[id] || Array(N).fill(null);
+  const v = toNum(c);
+  arr[run] = v === undefined ? null : v;
+}
+
+// 엑셀에서 복사한 표 붙여넣기 (첫 줄이 글자면 반응 이름으로 사용)
+function pasteGrid(e) {
+  const t = e.target;
+  if (t.dataset.run === undefined) return;
+  const text = (e.clipboardData || window.clipboardData).getData("text");
+  if (!/[\t\n]/.test(text.replace(/\s+$/, ""))) return;   // 한 칸짜리는 기본 붙여넣기
+  e.preventDefault();
+  const grid = text.replace(/\r/g, "").replace(/\n+$/, "").split("\n").map(l => l.split("\t"));
+  const run = Number(t.dataset.run), ri = Number(t.dataset.ri);
+  if (grid[0].some(c => toNum(c) === undefined)) {
+    const ids = grid.shift().map(nm => {
+      nm = nm.trim();
+      if (!nm) return null;
+      let r = doe.responses.find(x => x.name === nm);
+      if (!r) { r = { id: uid(), name: nm, unit: "", goal: "min" }; doe.responses.push(r); }
+      return r.id;
+    });
+    grid.forEach((row, i) => row.forEach((c, j) => { if (ids[j]) setResult(ids[j], run + i, c); }));
+  } else {
+    if (!doe.responses.length) { notify("먼저 반응 항목을 추가하거나, 첫 줄에 반응 이름까지 같이 복사해 붙여넣으세요.", "error"); return; }
+    grid.forEach((row, i) => row.forEach((c, j) => { const r = doe.responses[ri + j]; if (r) setResult(r.id, run + i, c); }));
+  }
+  saveDoe();
+  renderDoe();
+  notify(`${grid.length}개 run 의 값을 붙여넣었습니다.`);
+}
+
+let anovaTimer = null;
+const scheduleAnova = () => { clearTimeout(anovaTimer); anovaTimer = setTimeout(() => { renderAnova(); refreshNext(); }, 350); };
+function refreshNext() {
+  const b = document.querySelector('#doe-body [data-doe="goto"][data-step="3"]');
+  if (b) b.disabled = !analyzable().length;
+  const s = document.querySelector('#doe-stepper [data-step="3"]');
+  if (s) s.disabled = !analyzable().length;
+}
+
+const termName = (t, d) => (t.factors.length === 1 ? factorLabel(d.factors[t.factors[0]], t.factors[0]) : `${t.key} 교호작용`);
+const sigOf = t => (t.pooled ? ["p", "풀링"] : !Number.isFinite(t.p) ? ["n", "판단 불가"] : t.p < 0.05 ? ["s", "유의"] : t.p < 0.10 ? ["w", "약간 유의"] : ["n", "영향 작음"]);
+
+function renderAnova() {
+  const el = document.getElementById("doe-anova");
+  if (!el) return;
+  const head = `<div class="panel-h"><h3><span class="num">3</span>ANOVA — 어떤 인자가 결과에 영향을 주나</h3>
+    ${help("ANOVA(분산분석)는 결과의 흩어짐을 인자별로 나눠, 각 인자가 결과를 얼마나 바꾸는지 봅니다. <b>기여율</b>: 전체 변동 중 그 인자가 설명하는 비율. <b>p 값</b>: 우연히 이 정도 차이가 날 확률 (0.05 미만이면 '유의' = 진짜 영향이 있다고 봄). <b>풀링</b>: 영향이 아주 작은 인자를 오차로 합쳐 나머지 인자를 판단하는 다구찌 방법. 해석(CAE)은 반복 오차가 없어서 오차는 모델이 설명 못 한 부분입니다.")}</div>`;
+  const list = analyzable();
+  if (!list.length) { el.innerHTML = `${head}<p class="empty">반응 값을 3개 run 이상 입력하면 분석이 나옵니다. 모든 run 을 채우면 가장 정확합니다.</p>`; return; }
+  if (!list.includes(doe.activeResp)) doe.activeResp = list[0];
+  const r = respById(doe.activeResp), a = analyze(r.id), d = doe.design, fit = a.fit;
+  const act = fit.table.filter(t => !t.pooled).sort((x, y) => y.ss - x.ss), pooled = fit.table.filter(t => t.pooled);
+  const unit = r.unit ? ` ${esc(r.unit)}` : "";
+
+  // 쉬운 말 요약
+  const top = act[0], sig = act.filter(t => t.p < 0.05);
+  const best = d.factors.map((f, i) => `${SYMBOLS[i]}=${esc(f.levels[bestIdx(a.lsm[i], r.goal)])}`);
+  const lines = [
+    `<b>${esc(r.name)}</b> 에 가장 크게 영향을 준 것은 <b>${esc(termName(top, d))}</b> 입니다 (기여율 ${top.contrib.toFixed(1)}%).`,
+    sig.length ? `통계적으로 의미 있는(p < 0.05) 인자: <b>${sig.map(t => t.key).join(", ")}</b>.`
+      : fit.dfE > 0 ? "p < 0.05 로 유의한 인자는 없습니다. 효과가 작거나 run 이 부족할 수 있습니다." : "",
+    sig.some(t => t.contrib < 1) ? `단, ${sig.filter(t => t.contrib < 1).map(t => t.key).join(", ")} 는 유의하지만 기여율이 1% 미만이라 실무적인 영향은 작습니다 (해석 결과는 잡음이 적어 작은 차이도 유의하게 나옵니다).` : "",
+    pooled.length ? `영향이 작아 오차로 합친 인자(풀링): ${pooled.map(t => t.key).join(", ")}${a.auto ? " (오차 자유도를 위해 자동)" : ""}.` : "",
+    `${GOALS[r.goal]} 기준 인자별 좋은 수준: ${best.join(", ")} (아래 주효과 그래프의 초록 점).`,
+    a.missing.length ? `run ${a.missing.join(", ")} 은 값이 비어 있어 빼고 분석했습니다.` : "",
+  ].filter(Boolean);
+
+  const bars = [...act.map(t => ({ label: termName(t, d), v: t.contrib, cls: sigOf(t)[0] })),
+                { label: "오차 (풀링 포함)", v: fit.sst > 0 ? (fit.sse / fit.sst) * 100 : 0, cls: "e" }];
+  const row = t => { const [c, txt] = sigOf(t);
+    return `<tr class="${t.pooled ? "pooled" : ""}"><td>${esc(termName(t, d))}${t.df < t.dfFull ? ' <span class="muted">(일부 겹침)</span>' : ""}</td><td>${t.df}</td>
+      <td>${fmtN(t.ss)}</td><td>${fmtN(t.ms)}</td><td>${t.pooled ? "–" : fmtN(t.F)}</td><td>${t.pooled ? "–" : fmtP(t.p)}</td><td>${t.contrib.toFixed(1)}%</td>
+      <td><span class="sig ${c}">${txt}</span></td><td><input type="checkbox" data-pool="${t.key}" ${t.pooled ? "checked" : ""} aria-label="${t.key} 풀링"></td></tr>`; };
+
+  // 주효과도: 모든 인자를 같은 세로축으로
+  const all = a.lsm.flat().filter(Number.isFinite);
+  let lo = Math.min(...all), hi = Math.max(...all);
+  const pad = (hi - lo) * 0.12 || Math.abs(hi) * 0.05 || 1;
+  lo -= pad; hi += pad;
+  const contribOf = i => (fit.table.find(t => t.key === SYMBOLS[i]) || { contrib: 0 }).contrib;
+
+  el.innerHTML = `${head}
+    <div class="pills" role="group" aria-label="분석할 반응">${doe.responses.map(x => `<button type="button" data-doe="resp-pick" data-id="${x.id}"
+      aria-pressed="${x.id === r.id}" ${list.includes(x.id) ? "" : 'disabled title="값이 3개 run 이상 필요"'}>${esc(x.name)}</button>`).join("")}</div>
+    <div class="summary">${lines.map(l => `<p>${l}</p>`).join("")}</div>
+    <div class="two">
+      <div><div class="muted" style="margin-bottom:6px">기여율 (전체 변동 중 비율)</div>
+        <div class="bars">${bars.map(b => `<div class="bar-row"><span class="lbl" title="${esc(b.label)}">${esc(b.label)}</span>
+          <div class="bar-track"><div class="bar-fill ${b.cls}" style="width:${Math.max(0, Math.min(100, b.v))}%"></div></div><span class="val">${b.v.toFixed(1)}%</span></div>`).join("")}</div></div>
+      <dl class="stats"><dt>분석한 run</dt><dd>${fit.n}</dd><dt>R² (설명력)</dt><dd>${(fit.r2 * 100).toFixed(1)}%</dd>
+        <dt>조정 R²</dt><dd>${Number.isFinite(fit.adjR2) ? `${(fit.adjR2 * 100).toFixed(1)}%` : "–"}</dd><dt>오차 자유도</dt><dd>${fit.dfE}</dd>
+        <dt>평균</dt><dd>${fmtN(fit.mean)}${unit}</dd></dl>
+    </div>
+    <div class="table-wrap"><table class="atable"><thead><tr><th>요인</th><th>자유도</th><th>제곱합</th><th>평균제곱</th><th>F</th><th>p 값</th><th>기여율</th><th>판정</th>
+      <th title="체크하면 이 요인을 오차로 합칩니다">풀링</th></tr></thead>
+      <tbody>${act.map(row).join("")}${pooled.map(row).join("")}
+        <tr class="tot"><td>오차${pooled.length ? " (풀링 포함)" : ""}</td><td>${fit.dfE}</td><td>${fmtN(fit.sse)}</td><td>${fmtN(fit.mse)}</td><td></td><td></td>
+          <td>${fit.sst > 0 ? ((fit.sse / fit.sst) * 100).toFixed(1) : "0.0"}%</td><td></td><td></td></tr>
+        <tr class="tot"><td>합계</td><td>${fit.n - 1}</td><td>${fmtN(fit.sst)}</td><td></td><td></td><td></td><td>100%</td><td></td><td></td></tr></tbody></table></div>
+    <h4 class="muted" style="margin:14px 0 6px">주효과 그래프 — 수준을 바꿀 때 ${esc(r.name)} 평균이 어떻게 변하나 (점선: 전체 평균, 초록: ${GOALS[r.goal]} 기준 좋은 수준)</h4>
+    <div class="me-grid">${d.factors.map((f, i) => `<div class="me-card"><div class="t" title="${esc(factorLabel(f, i))}">${esc(factorLabel(f, i))}</div>
+      <div class="d">기여율 ${contribOf(i).toFixed(1)}% · 변화폭 ${fmtN(Math.max(...a.lsm[i]) - Math.min(...a.lsm[i]))}${unit}</div>
+      ${meSvg(f, a.lsm[i], lo, hi, r.goal, fit.mean)}</div>`).join("")}</div>
+    <details class="adv"><summary>고급: 교호작용 · 풀링 설정</summary><div class="adv-body">
+      <div class="muted">교호작용: 두 인자를 함께 바꿀 때 효과가 달라지는지 봅니다. 설계와 run 수가 허용할 때만 추정되며, 직교배열에서는 다른 인자와 겹칠 수 있습니다.</div>
+      <div class="inter-list">${factorPairs(d.factors).map(([x, y]) => `<label><input type="checkbox" data-ainter="${x.id}|${y.id}"
+        ${hasPair((doe.anovaCfg[r.id] || {}).inters || [], x.id, y.id) ? "checked" : ""}> ${SYMBOLS[d.factors.indexOf(x)]}×${SYMBOLS[d.factors.indexOf(y)]}</label>`).join("")}</div>
+      <div class="muted">풀링: ${a.auto ? "지금은 자동 (오차 자유도가 2 보다 작을 때만 가장 작은 요인부터 합침)" : "지금은 표의 '풀링' 칸에서 직접 고른 설정"}.</div>
+      <div><button type="button" class="btn" data-doe="pool-auto" ${a.auto ? "disabled" : ""}>자동 풀링으로 되돌리기</button></div>
+    </div></details>`;
+}
+
+function meSvg(f, means, lo, hi, goal, grand) {
+  const W = 240, H = 150, ml = 44, mr = 10, mt = 10, mb = 26, pw = W - ml - mr, ph = H - mt - mb;
+  const n = means.length, x = j => ml + (pw * (j + 0.5)) / n, y = v => mt + ph - ((v - lo) / (hi - lo)) * ph;
+  const b = bestIdx(means, goal);
+  const ticks = [lo, (lo + hi) / 2, hi];
+  const short = s => (s.length > 8 ? `${s.slice(0, 7)}…` : s);
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(f.name)} 주효과: ${f.levels.map((lv, j) => `${esc(lv)} ${fmtN(means[j])}`).join(", ")}">
+    ${ticks.map(t => `<line x1="${ml}" x2="${W - mr}" y1="${y(t)}" y2="${y(t)}" style="stroke:var(--border)"/>
+      <text x="${ml - 5}" y="${y(t) + 4}" text-anchor="end" font-size="10" style="fill:var(--muted)">${fmtN(t)}</text>`).join("")}
+    <line x1="${ml}" x2="${W - mr}" y1="${y(grand)}" y2="${y(grand)}" stroke-dasharray="4 3" style="stroke:var(--muted)"/>
+    <polyline fill="none" stroke-width="2" points="${means.map((v, j) => `${x(j)},${y(v)}`).join(" ")}" style="stroke:var(--accent)"/>
+    ${means.map((v, j) => `<circle cx="${x(j)}" cy="${y(v)}" r="${j === b ? 6 : 4}" style="fill:${j === b ? "var(--good-t)" : "var(--accent)"};stroke:var(--bg);stroke-width:1.5"><title>${esc(f.levels[j])}: ${fmtN(v)}</title></circle>
+      <text x="${x(j)}" y="${H - 8}" text-anchor="middle" font-size="11" style="fill:var(--text-2)">${esc(short(f.levels[j]))}</text>`).join("")}
+  </svg>`;
+}
+
+// ----- 3단계: 최적화 -----
+const step3Html = () => `<div class="opt-grid"><section class="panel" id="doe-opt-form"></section><section class="panel" id="doe-opt-result" aria-live="polite"></section></div>`;
+function renderOpt() { renderOptForm(); renderOptResult(); }
+
+function renderOptForm() {
+  const el = document.getElementById("doe-opt-form");
+  if (!el) return;
+  const list = analyzable(), d = doe.design, o = doe.opt;
+  if (!list.includes(o.resp)) { o.resp = list[0]; o.goal = respById(o.resp).goal; }
+  const fit = analyze(o.resp).fit;
+  const contrib = i => fit.table.filter(t => t.factors.includes(i)).reduce((s, t) => s + t.contrib, 0);
+  const respOpts = sel => list.map(id => `<option value="${id}" ${id === sel ? "selected" : ""}>${esc(respById(id).name)}</option>`).join("");
+  el.innerHTML = `<div class="panel-h"><h3><span class="num">1</span>목표</h3>${help("어떤 반응을 가장 좋게 만들지 고릅니다. 침입량은 보통 '작게', 목표값은 특정 값에 맞추고 싶을 때 씁니다.")}</div>
+    <div class="form-grid">
+      <label>최적화할 반응 <select data-opt="resp">${respOpts(o.resp)}</select></label>
+      <div class="seg" role="radiogroup" aria-label="방향">${[["min", "작게"], ["max", "크게"], ["target", "목표값"]].map(([g, t]) => `<label class="${o.goal === g ? "on" : ""}">
+        <input type="radio" name="opt-goal" value="${g}" ${o.goal === g ? "checked" : ""}>${t}</label>`).join("")}</div>
+      ${o.goal === "target" ? `<label>목표값 <input type="number" step="any" data-opt="target" value="${o.target}"></label>` : ""}
+    </div>
+    <div class="panel-h"><h3><span class="num">2</span>조건 <span class="muted">(선택)</span></h3>${help("예: 질량 증가 ≤ 4 kg 처럼 다른 반응에 한계를 두면, 조건을 만족하는 조합 중에서 가장 좋은 것을 찾습니다.")}</div>
+    ${o.constraints.map((c, k) => `<div class="cons-row"><select data-cons="resp" data-k="${k}" aria-label="조건 ${k + 1} 반응">${respOpts(c.resp)}</select>
+      <select data-cons="op" data-k="${k}" aria-label="조건 ${k + 1} 부등호"><option value="<=" ${c.op === "<=" ? "selected" : ""}>≤</option><option value=">=" ${c.op === ">=" ? "selected" : ""}>≥</option></select>
+      <input type="number" step="any" data-cons="value" data-k="${k}" value="${c.value}" aria-label="조건 ${k + 1} 값">
+      <button type="button" class="x" data-doe="del-cons" data-k="${k}" aria-label="조건 ${k + 1} 삭제">✕</button></div>`).join("")}
+    <button type="button" class="btn" data-doe="add-cons">+ 조건 추가</button>
+    <div class="panel-h"><h3><span class="num">3</span>컨트롤 팩터</h3>${help("체크한 인자(컨트롤 팩터)만 가장 좋은 수준을 찾습니다. 체크를 끈 인자는 고른 수준으로 고정됩니다. 예: 비용·생산성 때문에 재질은 바꿀 수 없을 때 '고정'으로 두세요. 오른쪽 막대는 목표 반응에 대한 기여율입니다.")}</div>
+    <div class="table-wrap"><table class="ctable"><thead><tr><th>인자 · 기여율</th><th>최적화</th><th>고정 수준</th></tr></thead><tbody>
+      ${d.factors.map((f, i) => { const on = o.control[f.id] !== false, c = contrib(i);
+        return `<tr class="${on ? "" : "fixed"}"><td><div class="fname" title="${esc(factorLabel(f, i))}">${esc(factorLabel(f, i))}</div>
+            <span class="mini"><span style="width:${Math.min(100, c)}%"></span></span> <span class="muted">${c.toFixed(0)}%</span></td>
+          <td><label class="switch"><input type="checkbox" data-ctrl="${f.id}" ${on ? "checked" : ""}>${on ? "최적화" : "고정"}</label></td>
+          <td><select data-fix="${f.id}" ${on ? "disabled" : ""} aria-label="${SYMBOLS[i]} 고정 수준">${f.levels.map((lv, j) => `<option value="${j}" ${(o.fixed[f.id] || 0) === j ? "selected" : ""}>${esc(lv)}</option>`).join("")}</select></td></tr>`; }).join("")}
+    </tbody></table></div>
+    <div class="actions-row"><button type="button" class="btn" data-doe="ctrl-all">모두 최적화</button></div>`;
+}
+
+function renderOptResult() {
+  const el = document.getElementById("doe-opt-result");
+  if (!el) return;
+  const d = doe.design, o = doe.opt, list = analyzable();
+  const levels = d.factors.map(f => f.levels.length);
+  const models = Object.fromEntries(list.map(id => [id, analyze(id).fit.model]));
+  const control = d.factors.map(f => o.control[f.id] !== false), fixed = d.factors.map(f => o.fixed[f.id] || 0);
+  const cons = o.constraints.filter(c => models[c.resp] && Number.isFinite(c.value));
+  if (o.goal === "target" && !Number.isFinite(o.target)) { el.innerHTML = `<p class="empty">목표값을 입력하세요.</p>`; return; }
+  const res = optimizeLevels({ levels, models, objective: { resp: o.resp, goal: o.goal, target: o.target }, constraints: cons, control, fixed }, 5);
+  const best = res.top[0], ro = respById(o.resp), mo = models[o.resp];
+  const pred = predictModel(mo, best.levels), half = mo.dfE > 0 ? tInv(0.975, mo.dfE) * pred.se : NaN;
+  const unit = ro.unit ? ` <span class="unit">${esc(ro.unit)}</span>` : "";
+  // 목표·조건 반응 모델에 들어간 인자 = 결과에 영향이 있는 인자
+  const usedIds = [o.resp, ...cons.map(c => c.resp)];
+  const used = new Set(usedIds.flatMap(id => models[id].terms.flatMap(t => t.factors)));
+  // 비교 기준: 실측 결과가 조건을 만족한 DOE run 중 최선
+  const ys = resultValues(o.resp);
+  const score = v => (o.goal === "max" ? -v : o.goal === "target" ? Math.abs(v - o.target) : v);
+  const metCons = i => cons.every(c => { const v = resultValues(c.resp)[i]; return Number.isFinite(v) && (c.op === "<=" ? v <= c.value + 1e-9 : v >= c.value - 1e-9); });
+  const bestRun = ys.reduce((b, v, i) => (Number.isFinite(v) && metCons(i) && (b < 0 || score(v) < score(ys[b])) ? i : b), -1);
+  const same = d.rows.findIndex(r => r.every((j, i) => j === best.levels[i]));
+  let cmp = cons.length ? "조건을 만족한 DOE run 이 없습니다." : "";
+  if (bestRun >= 0 && bestRun === same) {
+    cmp = `추천 조합이 ${cons.length ? "조건을 만족한 DOE run 중" : "DOE 에서"} 가장 좋았던 run ${same + 1} 과 같습니다.<br>`
+      + `실측 ${fmtN(ys[same])}${ro.unit ? ` ${esc(ro.unit)}` : ""} — 이미 해석한 조합이라 확인 해석은 필요 없습니다.`;
+  } else if (bestRun >= 0) {
+    const diff = o.goal === "target" ? Math.abs(ys[bestRun] - o.target) - Math.abs(pred.y - o.target) : (o.goal === "max" ? pred.y - ys[bestRun] : ys[bestRun] - pred.y);
+    const pct = ys[bestRun] ? (diff / Math.abs(ys[bestRun])) * 100 : 0;
+    cmp = `${cons.length ? "조건을 만족한 DOE run 중" : "DOE 에서"} 가장 좋았던 run ${bestRun + 1}: ${fmtN(ys[bestRun])}${ro.unit ? ` ${esc(ro.unit)}` : ""}<br>`
+      + (Math.abs(pct) < 0.05 ? "→ 예측값이 그와 같습니다" : `→ 예측 <span class="${diff > 0 ? "good" : "bad"}">${Math.abs(pct).toFixed(1)}% ${diff > 0 ? "개선" : "나쁨"}</span>`);
+  }
+  const consCell = (id, v) => cons.filter(c => c.resp === id).map(c => {
+    const ok = c.op === "<=" ? v <= c.value + 1e-9 : v >= c.value - 1e-9;
+    return `<span class="${ok ? "good" : "bad"}">${ok ? "✓" : "✗"} ${c.op === "<=" ? "≤" : "≥"} ${fmtN(c.value)}</span>`;
+  }).join(" ") || "–";
+  const levelsOf = c => d.factors.map((f, i) => (control[i] ? `${SYMBOLS[i]}=${esc(f.levels[c.levels[i]])}` : "")).filter(Boolean).join(", ") || "(모두 고정)";
+  el.innerHTML = `<div class="panel-h"><h3>추천 조합</h3><span class="badge ${best.feasible ? "ok" : "warn"}">${cons.length ? (best.feasible ? "조건 만족" : "조건을 모두 만족하는 조합 없음 — 가장 가까운 조합") : "조건 없음"}</span></div>
+    <div class="combo">${d.factors.map((f, i) => { const idle = control[i] && !used.has(i);
+      return `<div class="combo-i ${control[i] ? (idle ? "idle" : "") : "fixed"}"><span class="k" title="${esc(factorLabel(f, i))}">${SYMBOLS[i]} · ${esc(f.name)}</span>
+        <b>${esc(levelText(f, best.levels[i]))}</b><span class="t">${!control[i] ? "고정" : idle ? "영향 작음 · 아무 수준이나 가능" : "최적 수준"}</span></div>`; }).join("")}</div>
+    <div class="pred"><div><div class="muted">예측 ${esc(ro.name)}</div><div class="big">${fmtN(pred.y)}${unit}</div>
+        <div class="muted">${Number.isFinite(half) ? `95% 신뢰구간 ${fmtN(pred.y - half)} ~ ${fmtN(pred.y + half)}` : "오차 자유도가 없어 신뢰구간은 계산하지 않았습니다"}</div></div>
+      <div class="cmp">${cmp}${same === bestRun && same >= 0 ? "" : `<br>${same >= 0 ? `이 조합은 DOE run ${same + 1} 과 같습니다 (실측 ${fmtN(ys[same])}).` : "DOE 에 없던 새 조합입니다 — 확인 해석을 꼭 해 보세요."}`}</div></div>
+    <div class="muted" style="margin-bottom:4px">다른 반응 예측</div>
+    <div class="table-wrap"><table class="atable"><thead><tr><th>반응</th><th>예측</th><th>조건</th></tr></thead><tbody>
+      ${list.map(id => `<tr><td>${esc(respById(id).name)}${id === o.resp ? " <span class=\"muted\">(목표)</span>" : ""}</td><td>${fmtN(best.preds[id])} ${esc(respById(id).unit || "")}</td><td>${consCell(id, best.preds[id])}</td></tr>`).join("")}
+    </tbody></table></div>
+    <div class="muted" style="margin:12px 0 4px">다른 후보 (상위 ${res.top.length}개, ${res.exhaustive ? `가능한 조합 ${res.evaluated}개 모두 계산` : `${res.evaluated}개 조합 탐색`})</div>
+    <div class="table-wrap"><table class="atable"><thead><tr><th>순위</th><th>컨트롤 팩터 수준</th><th>예측 ${esc(ro.name)}</th><th>조건</th></tr></thead><tbody>
+      ${res.top.map((c, k) => `<tr><td>${k + 1}</td><td style="text-align:left">${levelsOf(c)}</td><td>${fmtN(c.preds[o.resp])}</td><td>${cons.length ? (c.feasible ? '<span class="good">만족</span>' : '<span class="bad">불만족</span>') : "–"}</td></tr>`).join("")}
+    </tbody></table></div>
+    <p class="muted">예측은 2단계 ANOVA 모델(주효과${d.inters.length || Object.values(doe.anovaCfg).some(c => c.inters && c.inters.length) ? " + 고른 교호작용" : ""}, 풀링한 인자는 영향 없음) 기준입니다. 추천 조합으로 확인 해석을 꼭 해 보세요.</p>
+    <div class="actions-row"><button type="button" class="btn" data-doe="copy-best">추천 조합 복사 (확인 해석용)</button></div>`;
+  lastBest = best;
+}
+let lastBest = null;
+
+// ----- 예제 · 저장 · 내보내기 -----
+function exampleDoe() {
+  const d = newDoe();
+  d.factors = [["A-pillar 보강재 두께", "mm", "1.2, 1.6, 2.0"], ["Toepan 두께", "mm", "0.8, 1.0, 1.2"], ["Dash crossmember", "", "없음, 있음"],
+               ["Rocker 재질 강도", "MPa", "590, 980, 1180"], ["Hinge pillar 패치 두께", "mm", "0, 1.0, 1.4"]]
+    .map(([name, unit, levelsText]) => ({ id: uid(), name, unit, levelsText }));
+  const factors = d.factors.map(f => ({ id: f.id, name: f.name, unit: f.unit, levels: parseLevels(f.levelsText) }));
+  const levels = factors.map(f => f.levels.length);
+  const des = buildDesign(designOptions(levels).recommended, levels);
+  d.design = { method: des.method, label: des.label, rows: des.rows, factors, inters: [] };
+  const rnd = mulberry32(7), noise = s => (rnd() * 2 - 1) * s, r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;
+  d.responses = [{ id: uid(), name: "Left toepan", unit: "mm", goal: "min" }, { id: uid(), name: "Upper hinge pillar", unit: "mm", goal: "min" },
+                 { id: uid(), name: "질량 증가", unit: "kg", goal: "min" }];
+  const [t, h, m] = d.responses.map(r => r.id);
+  d.results[t] = des.rows.map(([a, b, c, e, g]) => r1(205 - 14 * a - 32 * b - 18 * c + [0, -9, -12][e] + [0, -3, -4][g] + noise(4)));
+  d.results[h] = des.rows.map(([a, b, c, e, g]) => r1(112 - 20 * a - 3 * b - 9 * c + [0, -4, -6][e] - 13 * g + noise(3)));
+  d.results[m] = des.rows.map(([a, b, c, e, g]) => r2(0.9 * a + 1.2 * b + 2.6 * c + [0, 0.15, 0.25][e] + 0.7 * g + noise(0.08)));
+  d.step = 2;
+  d.activeResp = t;
+  d.opt = { ...newOpt(), resp: t, goal: "min", constraints: [{ resp: m, op: "<=", value: 4 }] };
+  return d;
+}
+
+function downloadFile(name, text, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+const today = () => new Date().toISOString().slice(0, 10).replace(/-/g, "");
+const csvCell = v => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+function designTable() {
+  const d = doe.design;
+  return [["Run", ...d.factors.map((f, i) => factorLabel(f, i)), ...doe.responses.map(r => `${r.name}${r.unit ? ` (${r.unit})` : ""}`)],
+    ...d.rows.map((row, k) => [k + 1, ...row.map((j, i) => d.factors[i].levels[j]), ...doe.responses.map(r => { const v = (doe.results[r.id] || [])[k]; return v ?? ""; })])];
+}
+async function copyText(text, msg) {
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+  notify(msg);
+}
+
+// ===== 11. DOE 이벤트 =====
+const doeRoot = document.getElementById("page-doe");
+const rerenderStep1Bits = () => { renderMethods(); renderDesignPanel(); };
+
+doeRoot.addEventListener("click", e => {
+  const b = e.target.closest("[data-doe]");
+  if (!b || b.disabled) return;
+  const act = b.dataset.doe, o = doe.opt;
+  if (act === "goto") { doe.step = Number(b.dataset.step); saveDoe(); renderDoe(); window.scrollTo({ top: 0 }); return; }
+  if (act === "add-factor") {
+    if (doe.factors.length >= 15) { notify("인자는 15개까지입니다.", "error"); return; }
+    doe.factors.push(blankFactor()); saveDoe(); renderDoe();
+    const inputs = doeRoot.querySelectorAll('[data-ff="name"]');
+    inputs[inputs.length - 1].focus();
+    return;
+  }
+  if (act === "del-factor") {
+    doe.factors = doe.factors.filter(f => f.id !== b.dataset.id);
+    doe.inters = doe.inters.filter(p => !p.includes(b.dataset.id));
+    saveDoe(); renderDoe(); return;
+  }
+  if (act === "build") { b.disabled = true; b.textContent = "계산 중…"; setTimeout(buildFromUi, 20); return; }
+  if (act === "export-csv") {
+    downloadFile(`DOE_${today()}.csv`, `﻿${designTable().map(r => r.map(csvCell).join(",")).join("\r\n")}`, "text/csv");
+    return;
+  }
+  if (act === "copy-design") { copyText(designTable().map(r => r.join("\t")).join("\n"), "실험 표를 복사했습니다. 엑셀에 붙여넣으세요."); return; }
+  if (act === "example" || act === "new") {
+    const dirty = doe.design || doe.factors.some(f => f.name || f.levelsText);
+    if (dirty && !confirm(`지금 작업을 ${act === "example" ? "예제로 바꿀까요" : "지우고 새로 시작할까요"}? 필요하면 먼저 '저장 (.json)'을 누르세요.`)) return;
+    doe = act === "example" ? exampleDoe() : newDoe();
+    saveDoe(); renderDoe();
+    if (act === "example") notify("예제를 불러왔습니다: 5인자 L18, 반응 3개. 1단계에서 설계를, 3단계에서 최적화를 확인해 보세요.");
+    return;
+  }
+  if (act === "save") { downloadFile(`DOE_프로젝트_${today()}.json`, JSON.stringify(doe, null, 1), "application/json"); return; }
+  if (act === "open") { document.getElementById("doe-open").click(); return; }
+  if (act === "del-resp") {
+    const r = respById(b.dataset.id);
+    if (hasResults() && (doe.results[r.id] || []).some(v => v !== null) && !confirm(`'${r.name}' 결과를 지울까요?`)) return;
+    doe.responses = doe.responses.filter(x => x.id !== r.id);
+    delete doe.results[r.id];
+    delete doe.anovaCfg[r.id];
+    o.constraints = o.constraints.filter(c => c.resp !== r.id);
+    saveDoe(); renderDoe(); return;
+  }
+  if (act === "import") { importFromViewer(); return; }
+  if (act === "resp-pick") { doe.activeResp = b.dataset.id; saveDoe(); renderAnova(); return; }
+  if (act === "pool-auto") { const c = doe.anovaCfg[doe.activeResp] || {}; delete c.pooled; doe.anovaCfg[doe.activeResp] = c; saveDoe(); renderAnova(); return; }
+  if (act === "add-cons") {
+    const list = analyzable(), id = list.find(x => x !== o.resp) || list[0];
+    const ys = resultValues(id).filter(Number.isFinite);
+    o.constraints.push({ resp: id, op: "<=", value: Number(fmtN(ys.reduce((s, v) => s + v, 0) / ys.length)) });
+    saveDoe(); renderOpt(); return;
+  }
+  if (act === "del-cons") { o.constraints.splice(Number(b.dataset.k), 1); saveDoe(); renderOpt(); return; }
+  if (act === "ctrl-all") { o.control = {}; saveDoe(); renderOpt(); return; }
+  if (act === "copy-best" && lastBest) {
+    const d = doe.design;
+    copyText(d.factors.map((f, i) => `${factorLabel(f, i)}\t${f.levels[lastBest.levels[i]]}`).join("\n"), "추천 조합을 복사했습니다.");
+  }
+});
+
+doeRoot.addEventListener("input", e => {
+  const t = e.target, o = doe.opt;
+  if (t.dataset.ff) {   // 인자 표: 입력 칸 포커스를 잃지 않게 표는 다시 그리지 않음
+    const f = doe.factors.find(x => x.id === t.dataset.id);
+    f[t.dataset.ff] = t.value;
+    const cnt = doeRoot.querySelector(`[data-cnt="${f.id}"]`);
+    if (cnt) cnt.textContent = parseLevels(f.levelsText).length || "–";
+    saveDoe(); rerenderStep1Bits(); return;
+  }
+  if (t.dataset.doeIn === "druns") {
+    const v = parseInt(t.value, 10);
+    doe.doptRuns = Number.isFinite(v) ? v : null;
+    saveDoe(); return;
+  }
+  if (t.dataset.run !== undefined) {
+    const r = doe.responses[Number(t.dataset.ri)];
+    const v = toNum(t.value);
+    t.classList.toggle("bad", v === undefined);
+    if (!r) { if (t.value.trim().length === 1) notify("먼저 반응 항목을 추가하세요.", "error"); return; }
+    if (v === undefined) return;
+    setResult(r.id, Number(t.dataset.run), t.value);
+    saveDoe(); updateProgress(); scheduleAnova(); return;
+  }
+  if (t.dataset.opt === "target") { o.target = parseFloat(t.value); saveDoe(); renderOptResult(); return; }
+  if (t.dataset.cons === "value") { o.constraints[Number(t.dataset.k)].value = parseFloat(t.value); saveDoe(); renderOptResult(); }
+});
+
+doeRoot.addEventListener("change", e => {
+  const t = e.target, o = doe.opt;
+  if (t.name === "doe-method") { doe.method = t.value; saveDoe(); rerenderStep1Bits(); return; }
+  if (t.dataset.doeIn === "druns") { rerenderStep1Bits(); return; }
+  if (t.dataset.inter) {
+    const [a, b] = t.dataset.inter.split("|");
+    doe.inters = t.checked ? [...doe.inters, [a, b]] : doe.inters.filter(([x, y]) => !((x === a && y === b) || (x === b && y === a)));
+    saveDoe(); rerenderStep1Bits(); return;
+  }
+  if (t.dataset.rgoal) { respById(t.dataset.rgoal).goal = t.value; saveDoe(); renderAnova(); return; }
+  if (t.dataset.imp === "test") { doeImport.test = t.value; renderImport(); return; }
+  if (t.dataset.pool) {
+    const cfg = doe.anovaCfg[doe.activeResp] = doe.anovaCfg[doe.activeResp] || {};
+    const cur = analyze(doe.activeResp).pooled;
+    cfg.pooled = t.checked ? [...cur, t.dataset.pool] : cur.filter(k => k !== t.dataset.pool);
+    saveDoe(); renderAnova(); return;
+  }
+  if (t.dataset.ainter) {
+    const cfg = doe.anovaCfg[doe.activeResp] = doe.anovaCfg[doe.activeResp] || {};
+    const [a, b] = t.dataset.ainter.split("|"), cur = cfg.inters || [];
+    cfg.inters = t.checked ? [...cur, [a, b]] : cur.filter(([x, y]) => !((x === a && y === b) || (x === b && y === a)));
+    delete cfg.pooled;   // 항이 바뀌면 풀링은 자동으로 다시
+    saveDoe(); renderAnova(); return;
+  }
+  if (t.dataset.opt === "resp") { o.resp = t.value; o.goal = respById(t.value).goal; saveDoe(); renderOpt(); return; }
+  if (t.name === "opt-goal") {
+    o.goal = t.value;
+    if (t.value === "target" && !Number.isFinite(o.target)) o.target = 0;
+    saveDoe(); renderOpt(); return;
+  }
+  if (t.dataset.cons === "resp" || t.dataset.cons === "op") { o.constraints[Number(t.dataset.k)][t.dataset.cons] = t.value; saveDoe(); renderOptResult(); return; }
+  if (t.dataset.ctrl) { o.control[t.dataset.ctrl] = t.checked; saveDoe(); renderOpt(); return; }
+  if (t.dataset.fix) { o.fixed[t.dataset.fix] = Number(t.value); saveDoe(); renderOptResult(); }
+});
+
+doeRoot.addEventListener("submit", e => {
+  if (e.target.dataset.form !== "add-resp") return;
+  e.preventDefault();
+  const fd = new FormData(e.target), name = String(fd.get("name")).trim();
+  if (!name) return;
+  if (doe.responses.some(r => r.name === name)) { notify(`'${name}' 은 이미 있습니다.`, "error"); return; }
+  const r = { id: uid(), name, unit: String(fd.get("unit")).trim(), goal: fd.get("goal") };
+  doe.responses.push(r);
+  doe.results[r.id] = Array(doe.design.rows.length).fill(null);
+  saveDoe(); renderDoe();
+});
+
+doeRoot.addEventListener("paste", pasteGrid);
+
+document.getElementById("doe-open").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    const s = JSON.parse(await readFileText(file));
+    if (!s || !Array.isArray(s.factors)) throw new Error("DOE 프로젝트 파일이 아닙니다.");
+    doe = { ...newDoe(), ...s, opt: { ...newOpt(), ...s.opt } };
+    saveDoe(); renderDoe();
+    notify(`${file.name} 을 열었습니다.`);
+  } catch (err) {
+    notify(`열 수 없습니다: ${err.message}`, "error");
+  }
+});
+
+renderApp();
 </script>
 </body>
 </html>

@@ -6,7 +6,16 @@
 ## v2.0 (계획)
 - 우측 패널에 Gemini 채팅: 현재 선택한 run 데이터·판정 결과를 같이 보며 분석
 
-## v1.2 — 2026-10-27 (검토 중, 확정 후 releases/v1.2 에 보관)
+## v1.3 — 2026-10-31 (검토 중, 확정 후 releases/v1.3 에 보관)
+- 상단 기능 탭 추가: **Intrusion 뷰어 / DOE 분석** (한 앱으로 통합)
+- DOE 분석 3단계
+  - 실험 설계: 직교배열 10종 (L4~L32, L18 포함) · D-최적 (좌표 교환법) · 완전요인, 자동 추천, 교호작용 선택, CSV·엑셀 복사
+  - 결과 입력 · ANOVA: 엑셀 붙여넣기, Intrusion 뷰어 run 에서 가져오기 (run 번호 = run_id), ANOVA 표 · 기여율 · 주효과 그래프 · 자동/수동 풀링 · 쉬운 말 요약
+  - 최적화: 컨트롤 팩터 선택 (나머지 고정), 작게/크게/목표값, 다른 반응 조건, 예측 ± 95% 신뢰구간, 상위 5개 후보
+- 예제 프로젝트, 저장·열기 (.json), 브라우저 자동 저장
+- 테스트: `tests/doe.test.js`
+
+## v1.2 — 2026-10-27
 - 시험 3종 탭: Small overlap 운전석 / Small overlap 조수석 / Moderate overlap 2.0 (구조 판정만)
   - 조수석: Small Overlap Rating Protocol VII Appendix Figure A-4 기준, Lower / Upper 서브레이팅
   - MO 2.0: Rating Guidelines Version III Figure 7 기준, 구조 단일 판정, Y-Z·후방 X 성분 규칙
