@@ -1,0 +1,16 @@
+run_id,location,point,dx_mm,dy_mm,dz_mm,resultant_mm
+5,Lower_Hinge_Pillar,1,114.54,37.29,55.94,132.81
+5,Lower_Hinge_Pillar,2,111.14,36.19,54.28,128.87
+5,Lower_Hinge_Pillar,3,109.61,35.69,53.53,127.10
+5,Footrest,1,146.61,47.73,71.60,170.00
+5,Right_Toepan,1,263.04,85.64,128.46,305.00
+5,Center_Toepan,1,206.98,67.39,101.08,240.00
+5,Rocker_Panel,1,30.16,86.16,17.23,92.90
+5,Rocker_Panel,2,29.53,84.36,16.87,90.96
+5,Rocker_Panel,3,28.80,82.28,16.46,88.72
+5,Center_Dash,1,81.93,26.67,40.01,95.00
+5,Upper_Hinge_Pillar,1,125.00,40.70,61.05,144.94
+5,Upper_Hinge_Pillar,2,123.62,40.25,60.37,143.34
+5,Upper_Hinge_Pillar,3,117.03,38.10,57.15,135.70
+5,Upper_Dash,1,86.24,28.08,42.12,100.00
+5,Right_Lower_Dash,1,129.36,42.12,63.18,150.00

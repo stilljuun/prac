@@ -1,0 +1,9 @@
+run_id,location,point,dx_mm,dy_mm,dz_mm,resultant_mm
+5,Footrest,1,47.43,15.44,23.16,55.00
+5,Left_Toepan,1,64.68,21.06,31.59,75.00
+5,Center_Toepan,1,51.75,16.85,25.27,60.00
+5,Right_Toepan,1,-20.00,30.00,40.00,53.85
+5,Brake_Pedal,1,73.31,23.87,35.80,85.00
+5,Left_Instrument_Panel,1,18.00,5.40,4.50,19.32
+5,Right_Instrument_Panel,1,12.00,3.60,3.00,12.88
+5,Door_Opening,1,25.00,0.00,0.00,25.00
