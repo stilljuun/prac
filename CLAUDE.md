@@ -173,6 +173,12 @@ run_id,location,point,dx_mm,dy_mm,dz_mm,resultant_mm
 | Right_Instrument_Panel | – | – | `dx_mm` (후방 X) |
 | Door_Opening | – | – | `resultant_mm` (문 개구부 변형량을 이 컬럼에 넣는 것으로 가정, 확인 필요) |
 
+## 개발 도구 (Claude Code 스킬)
+`.claude/skills/` 에 설치되어 있다 (출처 · 버전 · 수정 내역: `.claude/README.md`).
+- 화면 디자인 · UX 작업은 `impeccable` 스킬 (작업용 UI = Operate 모드). 제품 정보는 `PRODUCT.md`. 위의 화면 구성 · 등급 색 · 단일 HTML 원칙이 디자인 제안보다 우선한다
+- 코드 변경은 `ponytail` 원칙 (이미 있는 코드 → 브라우저 기본 기능 → 최소 코드). 리뷰는 `/ponytail-review`, 전체 점검은 `/ponytail-audit`
+- 화면을 고친 뒤에는 `sh .claude/skills/impeccable/scripts/impeccable detect index.html` 로 디자인 검사 (자동 훅은 꺼 둠)
+
 ## 차기 단계 (지금 구현하지 않음)
 - DOE: 연속 인자 반응표면 (OLHS + 2차 모델), 다구찌 S/N 비, 다중 반응 만족도 함수, 최적 조합을 Intrusion 뷰어 run 과 연결해 IIHS 등급으로 최적화
 - "Good 까지 몇 mm" 목표 분석, 기준 run 대비 변화량(Δ), 위치별 run 추이 차트
