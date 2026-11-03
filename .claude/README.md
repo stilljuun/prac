@@ -51,6 +51,7 @@ npx impeccable install --project --providers=claude --no-hooks --force
 |---|---|
 | Leonxlnx/taste-skill | 디자인 스킬이 impeccable 과 겹침. 랜딩 페이지 · 마케팅 화면 쪽에 맞춰져 있음 |
 | affaan-m/ECC | 스킬 314개 · 에이전트 71개 묶음. 대부분 이 프로젝트와 무관하고, 필요한 부분(리뷰 · 접근성)은 위 스킬과 겹침 |
+| TerryFYL/claude-statistical-analysis-skill | 설문 · 사회과학용 통계 상담 스킬 (APA 표, 논문 문단, SEM · HLM). DOE 의 직교배열 · 풀링 · 기여율 · 최적화를 다루지 않고, 반복 없는 해석 결과에 정규성 검정 · 비모수 전환을 적용해 맞지 않음. "ANOVA" · CSV 언급만으로 켜져 앱 코드 작업을 Python 분석으로 돌릴 위험 |
 | cloudflare/security-audit-skill | 서버 · 다중 사용자 서비스용 대규모 보안 감사. 로컬 단일 HTML 도구에는 과함 (기본 `/security-review` 로 충분). Apps Script 웹앱으로 옮길 때 다시 검토 |
 | heygen-com/hyperframes | HTML → 동영상 렌더링 |
 | debpalash/VoiceStudio | AI 음성 앱 |
